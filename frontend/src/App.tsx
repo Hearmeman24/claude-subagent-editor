@@ -681,7 +681,13 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
                         server.tools.map(tool => tool.full_name)
                       )
                       const allTools = [...allBaseTools, ...allMcpTools]
-                      return allTools.filter(tool => !editedAgent.disallowed_tools.includes(tool))
+                      // Filter out:
+                      // 1. Already disallowed tools
+                      // 2. Currently ALLOWED tools (can't disallow what you're already allowing)
+                      return allTools.filter(tool =>
+                        !editedAgent.disallowed_tools.includes(tool) &&
+                        !(Array.isArray(editedAgent.tools) && editedAgent.tools.includes(tool))
+                      )
                     })()}
                     type="tool"
                     colorClass="text-red-400"
