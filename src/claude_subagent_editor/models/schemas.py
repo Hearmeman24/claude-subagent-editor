@@ -57,7 +57,7 @@ class AgentConfig(BaseModel):
 class HealthResponse(BaseModel):
     """Response for health check endpoint."""
 
-    status: Literal["healthy"] = "healthy"
+    status: Literal["healthy"] = Field(default="healthy", description="Health status indicator")
     version: str = Field(..., description="Application version")
     model_config = {"extra": "forbid"}
 
@@ -73,8 +73,8 @@ class ProjectScanResponse(BaseModel):
     """Response from scanning a project."""
 
     path: str = Field(..., description="Scanned project path")
-    agents: list[AgentConfig] = Field(default_factory=list)
-    mcp_servers: list[str] = Field(default_factory=list)
+    agents: list[AgentConfig] = Field(default_factory=list, description="List of discovered agents")
+    mcp_servers: list[str] = Field(default_factory=list, description="List of MCP server names")
     agent_count: int = Field(..., description="Number of agents found")
     model_config = {"extra": "forbid"}
 
