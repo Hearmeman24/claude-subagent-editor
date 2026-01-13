@@ -521,7 +521,9 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
                       label="Assigned"
                       dragStartHandler={(e, item) => handleDragStart(e, 'skill', item, 'assigned')}
                     />
-                    {editedAgent.skills.length > 0 && !editedAgent.tools.includes('Skill') && (
+                    {editedAgent.skills.length > 0 &&
+                     editedAgent.tools !== '*' &&
+                     (Array.isArray(editedAgent.tools) ? !editedAgent.tools.includes('Skill') : true) && (
                       <div className="text-amber-500 text-sm mt-2 flex items-center gap-1.5">
                         <span>⚠</span>
                         <span>The "Skill" base tool is required to invoke skills</span>
@@ -825,6 +827,23 @@ function AgentCard({ agent, onEdit }: { agent: AgentConfig; onEdit: (agent: Agen
                 className="px-2 py-1 text-xs rounded bg-skill-bg text-skill border border-skill/20"
               >
                 {skill}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Disallowed Tools - only show if there are any */}
+      {agent.disallowed_tools && agent.disallowed_tools.length > 0 && (
+        <div className="mb-3">
+          <div className="text-xs text-foreground-muted mb-1.5">Disallowed:</div>
+          <div className="flex flex-wrap gap-1.5">
+            {agent.disallowed_tools.map((tool) => (
+              <span
+                key={tool}
+                className="px-2 py-1 text-xs rounded bg-red-900/30 text-red-400 border border-red-800/50"
+              >
+                {tool}
               </span>
             ))}
           </div>
