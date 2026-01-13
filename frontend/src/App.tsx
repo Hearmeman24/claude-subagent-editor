@@ -116,7 +116,7 @@ function DragDropZone({
 function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: AgentEditorProps) {
   const [editedAgent, setEditedAgent] = useState<AgentConfig>({
     ...agent,
-    disallowed_tools: agent.disallowed_tools || (agent as any).disallowedTools || [],
+    disallowedTools: agent.disallowedTools || [],
   })
   const [activeTab, setActiveTab] = useState<'tools' | 'skills' | 'mcp' | 'disallowed'>('tools')
   const [availableDropActive, setAvailableDropActive] = useState(false)
@@ -146,7 +146,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
         description: editedAgent.description,
         model: editedAgent.model,
         tools: editedAgent.tools,
-        disallowedTools: editedAgent.disallowed_tools,
+        disallowedTools: editedAgent.disallowedTools,
         skills: editedAgent.skills,
         body: editedAgent.body,
       };
@@ -173,12 +173,12 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
     if (allToolsEnabled) return
     const toolsArray = editedAgent.tools as string[]
     if (!toolsArray.includes(tool)) {
-      // Remove from disallowed_tools if present
-      const updatedDisallowed = editedAgent.disallowed_tools.filter(t => t !== tool)
+      // Remove from disallowedTools if present
+      const updatedDisallowed = editedAgent.disallowedTools.filter(t => t !== tool)
       setEditedAgent({
         ...editedAgent,
         tools: [...toolsArray, tool],
-        disallowed_tools: updatedDisallowed,
+        disallowedTools: updatedDisallowed,
       })
     }
   }
@@ -195,12 +195,12 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
     if (allToolsEnabled) return
     const toolsArray = editedAgent.tools as string[]
     if (!toolsArray.includes(fullName)) {
-      // Remove from disallowed_tools if present
-      const updatedDisallowed = editedAgent.disallowed_tools.filter(t => t !== fullName)
+      // Remove from disallowedTools if present
+      const updatedDisallowed = editedAgent.disallowedTools.filter(t => t !== fullName)
       setEditedAgent({
         ...editedAgent,
         tools: [...toolsArray, fullName],
-        disallowed_tools: updatedDisallowed,
+        disallowedTools: updatedDisallowed,
       })
     }
   }
@@ -214,7 +214,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
   }
 
   const addDisallowedTool = (tool: string) => {
-    if (editedAgent.disallowed_tools.includes(tool)) return
+    if (editedAgent.disallowedTools.includes(tool)) return
 
     // Remove from tools if present
     const toolsArray = editedAgent.tools === '*' ? [] : (editedAgent.tools as string[])
@@ -223,14 +223,14 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
     setEditedAgent({
       ...editedAgent,
       tools: editedAgent.tools === '*' ? '*' : updatedTools,
-      disallowed_tools: [...editedAgent.disallowed_tools, tool],
+      disallowedTools: [...editedAgent.disallowedTools, tool],
     })
   }
 
   const removeDisallowedTool = (tool: string) => {
     setEditedAgent({
       ...editedAgent,
-      disallowed_tools: editedAgent.disallowed_tools.filter((t) => t !== tool),
+      disallowedTools: editedAgent.disallowedTools.filter((t) => t !== tool),
     })
   }
 
@@ -535,126 +535,136 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
 
               {activeTab === 'mcp' && (
                 <>
-                  {/* Available MCP Tools - Grouped by Server */}
-                  <div className="flex-1">
-                    <div className="text-xs font-medium text-foreground-secondary mb-2">Available</div>
-                    <div
-                      onDrop={handleAvailableDrop}
-                      onDragOver={(e) => {
-                        handleDragOver(e)
-                        setAvailableDropActive(true)
-                      }}
-                      onDragLeave={() => setAvailableDropActive(false)}
-                      className={cn(
-                        'min-h-[200px] max-h-[200px] overflow-y-auto p-3 rounded border-2 border-dashed transition-colors',
-                        availableDropActive ? 'border-mcp bg-mcp/10' : 'border-border bg-background-elevated'
-                      )}
-                    >
-                      {mcpTools.length === 0 && (
-                        <span className="text-xs text-foreground-muted italic">Loading MCP tools...</span>
-                      )}
-                      {mcpTools.map((server) => {
-                        const availableTools = server.tools.filter(
-                          tool => !agentMcpTools.includes(tool.full_name)
-                        )
-                        if (availableTools.length === 0 && server.connected) return null
+                  {allToolsEnabled ? (
+                    <div className="flex-1 flex items-center justify-center p-8 rounded border-2 border-dashed border-border bg-background-elevated">
+                      <div className="bg-blue-900/30 border border-blue-700 rounded p-4 text-blue-300 text-sm max-w-md">
+                        <strong>ALL TOOLS</strong> selected — SubAgent will have access to all MCP servers in global and project scope.
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Available MCP Tools - Grouped by Server */}
+                      <div className="flex-1">
+                        <div className="text-xs font-medium text-foreground-secondary mb-2">Available</div>
+                        <div
+                          onDrop={handleAvailableDrop}
+                          onDragOver={(e) => {
+                            handleDragOver(e)
+                            setAvailableDropActive(true)
+                          }}
+                          onDragLeave={() => setAvailableDropActive(false)}
+                          className={cn(
+                            'min-h-[200px] max-h-[200px] overflow-y-auto p-3 rounded border-2 border-dashed transition-colors',
+                            availableDropActive ? 'border-mcp bg-mcp/10' : 'border-border bg-background-elevated'
+                          )}
+                        >
+                          {mcpTools.length === 0 && (
+                            <span className="text-xs text-foreground-muted italic">Loading MCP tools...</span>
+                          )}
+                          {mcpTools.map((server) => {
+                            const availableTools = server.tools.filter(
+                              tool => !agentMcpTools.includes(tool.full_name)
+                            )
+                            if (availableTools.length === 0 && server.connected) return null
 
-                        return (
-                          <div key={server.name} className="mb-3 last:mb-0">
-                            <button
-                              onClick={() => toggleServer(server.name)}
-                              className="flex items-center gap-1.5 w-full text-xs font-medium text-foreground-secondary hover:text-foreground transition-colors mb-1.5"
-                            >
-                              {expandedServers[server.name] ? (
-                                <ChevronDown className="w-3 h-3" />
-                              ) : (
-                                <ChevronRight className="w-3 h-3" />
-                              )}
-                              <span>{server.name}</span>
-                              {server.connected ? (
-                                <span className="text-green-500">✓</span>
-                              ) : (
-                                <span className="text-amber-500" title={server.error || 'Not connected'}>
-                                  <AlertTriangle className="w-3 h-3" />
-                                </span>
-                              )}
-                            </button>
-                            {expandedServers[server.name] && (
-                              <div className="pl-4 space-y-1">
-                                {!server.connected && (
-                                  <>
-                                    <div className="text-xs text-foreground-muted italic">
-                                      {server.error || 'No tools available'}
-                                    </div>
-                                    <div className="text-amber-500 text-xs mt-1">
-                                      Couldn't retrieve actions for {server.name}.
-                                      Consider adding manually by running <code className="bg-zinc-800 px-1 py-0.5 rounded">/mcp</code> in Claude Code.
-                                    </div>
-                                  </>
+                            return (
+                              <div key={server.name} className="mb-3 last:mb-0">
+                                <button
+                                  onClick={() => toggleServer(server.name)}
+                                  className="flex items-center gap-1.5 w-full text-xs font-medium text-foreground-secondary hover:text-foreground transition-colors mb-1.5"
+                                >
+                                  {expandedServers[server.name] ? (
+                                    <ChevronDown className="w-3 h-3" />
+                                  ) : (
+                                    <ChevronRight className="w-3 h-3" />
+                                  )}
+                                  <span>{server.name}</span>
+                                  {server.connected ? (
+                                    <span className="text-green-500">✓</span>
+                                  ) : (
+                                    <span className="text-amber-500" title={server.error || 'Not connected'}>
+                                      <AlertTriangle className="w-3 h-3" />
+                                    </span>
+                                  )}
+                                </button>
+                                {expandedServers[server.name] && (
+                                  <div className="pl-4 space-y-1">
+                                    {!server.connected && (
+                                      <>
+                                        <div className="text-xs text-foreground-muted italic">
+                                          {server.error || 'No tools available'}
+                                        </div>
+                                        <div className="text-amber-500 text-xs mt-1">
+                                          Couldn't retrieve actions for {server.name}.
+                                          Consider adding manually by running <code className="bg-zinc-800 px-1 py-0.5 rounded">/mcp</code> in Claude Code.
+                                        </div>
+                                      </>
+                                    )}
+                                    {availableTools.map((tool) => (
+                                      <span
+                                        key={tool.full_name}
+                                        draggable
+                                        onDragStart={(e) => handleDragStart(e, 'mcp', tool.full_name, 'available')}
+                                        className="px-2 py-1 text-xs rounded border flex items-center gap-1.5 cursor-grab active:cursor-grabbing bg-mcp-bg text-mcp border-mcp/20"
+                                        title={tool.description || tool.name}
+                                      >
+                                        {tool.name}
+                                      </span>
+                                    ))}
+                                  </div>
                                 )}
-                                {availableTools.map((tool) => (
-                                  <span
-                                    key={tool.full_name}
-                                    draggable
-                                    onDragStart={(e) => handleDragStart(e, 'mcp', tool.full_name, 'available')}
-                                    className="px-2 py-1 text-xs rounded border flex items-center gap-1.5 cursor-grab active:cursor-grabbing bg-mcp-bg text-mcp border-mcp/20"
-                                    title={tool.description || tool.name}
-                                  >
-                                    {tool.name}
-                                  </span>
-                                ))}
                               </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
+                            )
+                          })}
+                        </div>
+                      </div>
 
-                  {/* Assigned MCP Tools */}
-                  <div className="flex-1">
-                    <div className="text-xs font-medium text-foreground-secondary mb-2">Assigned</div>
-                    <div
-                      onDrop={handleAssignedDrop}
-                      onDragOver={(e) => {
-                        handleDragOver(e)
-                        setAssignedDropActive(true)
-                      }}
-                      onDragLeave={() => setAssignedDropActive(false)}
-                      className={cn(
-                        'min-h-[200px] max-h-[200px] overflow-y-auto p-3 rounded border-2 border-dashed transition-colors',
-                        assignedDropActive ? 'border-mcp bg-mcp/10' : 'border-border bg-background-elevated',
-                        'flex flex-wrap gap-2 content-start'
-                      )}
-                    >
-                      {agentMcpTools.length === 0 && (
-                        <span className="text-xs text-foreground-muted italic">Drag tools here</span>
-                      )}
-                      {agentMcpTools.map((fullName) => {
-                        // Extract display name from full_name
-                        const parts = fullName.split('__')
-                        const displayName = parts.length >= 3 ? parts[2] : fullName
+                      {/* Assigned MCP Tools */}
+                      <div className="flex-1">
+                        <div className="text-xs font-medium text-foreground-secondary mb-2">Assigned</div>
+                        <div
+                          onDrop={handleAssignedDrop}
+                          onDragOver={(e) => {
+                            handleDragOver(e)
+                            setAssignedDropActive(true)
+                          }}
+                          onDragLeave={() => setAssignedDropActive(false)}
+                          className={cn(
+                            'min-h-[200px] max-h-[200px] overflow-y-auto p-3 rounded border-2 border-dashed transition-colors',
+                            assignedDropActive ? 'border-mcp bg-mcp/10' : 'border-border bg-background-elevated',
+                            'flex flex-wrap gap-2 content-start'
+                          )}
+                        >
+                          {agentMcpTools.length === 0 && (
+                            <span className="text-xs text-foreground-muted italic">Drag tools here</span>
+                          )}
+                          {agentMcpTools.map((fullName) => {
+                            // Extract display name from full_name
+                            const parts = fullName.split('__')
+                            const displayName = parts.length >= 3 ? parts[2] : fullName
 
-                        return (
-                          <span
-                            key={fullName}
-                            draggable
-                            onDragStart={(e) => handleDragStart(e, 'mcp', fullName, 'assigned')}
-                            className="px-2 py-1 text-xs rounded border flex items-center gap-1.5 h-fit cursor-grab active:cursor-grabbing bg-mcp-bg text-mcp border-mcp/20"
-                            title={fullName}
-                          >
-                            {displayName}
-                            <button
-                              onClick={() => removeMcpTool(fullName)}
-                              className="hover:text-foreground transition-colors"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </span>
-                        )
-                      })}
-                    </div>
-                  </div>
+                            return (
+                              <span
+                                key={fullName}
+                                draggable
+                                onDragStart={(e) => handleDragStart(e, 'mcp', fullName, 'assigned')}
+                                className="px-2 py-1 text-xs rounded border flex items-center gap-1.5 h-fit cursor-grab active:cursor-grabbing bg-mcp-bg text-mcp border-mcp/20"
+                                title={fullName}
+                              >
+                                {displayName}
+                                <button
+                                  onClick={() => removeMcpTool(fullName)}
+                                  className="hover:text-foreground transition-colors"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              </span>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
 
@@ -672,7 +682,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
                       // 1. Already disallowed tools
                       // 2. Currently ALLOWED tools (can't disallow what you're already allowing)
                       return allTools.filter(tool =>
-                        !editedAgent.disallowed_tools.includes(tool) &&
+                        !editedAgent.disallowedTools.includes(tool) &&
                         !(Array.isArray(editedAgent.tools) && editedAgent.tools.includes(tool))
                       )
                     })()}
@@ -692,7 +702,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
                     dragStartHandler={(e, item) => handleDragStart(e, 'disallowed', item, 'available')}
                   />
                   <DragDropZone
-                    items={editedAgent.disallowed_tools}
+                    items={editedAgent.disallowedTools}
                     type="tool"
                     colorClass="text-red-400"
                     bgClass="bg-red-900/30"
@@ -713,7 +723,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
             </div>
 
             {/* Add MCP Action Manually - outside the flex container */}
-            {activeTab === 'mcp' && (
+            {activeTab === 'mcp' && !allToolsEnabled && (
               <div className="mt-4 border-t border-zinc-700 pt-4">
                 <h4 className="text-sm font-medium mb-2">Add MCP Action Manually</h4>
                 <div className="flex gap-2">
@@ -834,11 +844,11 @@ function AgentCard({ agent, onEdit }: { agent: AgentConfig; onEdit: (agent: Agen
       )}
 
       {/* Disallowed Tools - only show if there are any */}
-      {agent.disallowed_tools && agent.disallowed_tools.length > 0 && (
+      {agent.disallowedTools && agent.disallowedTools.length > 0 && (
         <div className="mb-3">
           <div className="text-xs text-foreground-muted mb-1.5">Disallowed:</div>
           <div className="flex flex-wrap gap-1.5">
-            {agent.disallowed_tools.map((tool) => (
+            {agent.disallowedTools.map((tool) => (
               <span
                 key={tool}
                 className="px-2 py-1 text-xs rounded bg-red-900/30 text-red-400 border border-red-800/50"
