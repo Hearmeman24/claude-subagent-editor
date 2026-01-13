@@ -1,0 +1,66 @@
+:root {
+  /* Colors - Neutral palette with accent */
+  --color-bg: #0a0a0a;
+  --color-bg-elevated: #141414;
+  --color-bg-hover: #1a1a1a;
+  --color-border: #262626;
+  --color-border-subtle: #1a1a1a;
+
+  --color-text-primary: #fafafa;
+  --color-text-secondary: #a1a1aa;
+  --color-text-muted: #71717a;
+
+  /* Accent colors for resource types */
+  --color-tool: #3b82f6;        /* Blue - base tools */
+  --color-tool-bg: #3b82f610;
+  --color-mcp: #a855f7;         /* Purple - MCP servers */
+  --color-mcp-bg: #a855f710;
+  --color-skill: #22c55e;       /* Green - skills */
+  --color-skill-bg: #22c55e10;
+
+  /* Model indicators */
+  --color-opus: #f97316;        /* Orange */
+  --color-sonnet: #06b6d4;      /* Cyan */
+  --color-haiku: #84cc16;       /* Lime */
+
+  /* Spacing scale */
+  --space-1: 0.25rem;   /* 4px */
+  --space-2: 0.5rem;    /* 8px */
+  --space-3: 0.75rem;   /* 12px */
+  --space-4: 1rem;      /* 16px */
+  --space-6: 1.5rem;    /* 24px */
+  --space-8: 2rem;      /* 32px */
+  --space-12: 3rem;     /* 48px */
+
+  /* Typography */
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  --text-xs: 0.75rem;   /* 12px */
+  --text-sm: 0.875rem;  /* 14px */
+  --text-base: 1rem;    /* 16px */
+  --text-lg: 1.125rem;  /* 18px */
+  --text-xl: 1.25rem;   /* 20px */
+
+  /* Radii */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-full: 9999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.6);
+
+  /* Transitions */
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease;
+
+  /* Z-index layers */
+  --z-base: 0;
+  --z-dropdown: 100;
+  --z-modal: 200;
+  --z-toast: 300;
+}
