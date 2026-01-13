@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Folder, ArrowLeft } from 'lucide-react'
+import { ArrowLeft } from 'lucide-react'
 import type { AgentConfig, ProjectScanResponse } from '@/types'
 import { cn } from '@/lib/utils'
 import ProjectPicker from '@/components/ProjectPicker'
