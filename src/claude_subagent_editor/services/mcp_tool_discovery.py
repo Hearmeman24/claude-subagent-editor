@@ -37,6 +37,56 @@ class MCPServerWithTools:
 class MCPToolDiscovery:
     """Service for discovering tools from MCP servers."""
 
+    def _load_mcp_configs(self, project_config_path: Path) -> dict[str, dict]:
+        """Load MCP configs from both ~/.claude.json and project .mcp.json.
+
+        Project config takes precedence over global config.
+
+        Args:
+            project_config_path: Path to project .mcp.json file.
+
+        Returns:
+            dict[str, dict]: Merged server configurations with headers.
+        """
+        configs: dict[str, dict] = {}
+
+        # Load from ~/.claude.json first (lower precedence)
+        global_config_path = Path.home() / ".claude.json"
+        if global_config_path.exists():
+            try:
+                data = json.loads(global_config_path.read_text(encoding="utf-8"))
+                for name, config in data.get("mcpServers", {}).items():
+                    configs[name] = {
+                        "url": config.get("url"),
+                        "command": config.get("command"),
+                        "args": config.get("args", []),
+                        "env": config.get("env", {}),
+                        "headers": config.get("headers", {}),
+                        "transport": config.get("transport", "stdio"),
+                    }
+                logger.debug("Loaded %d servers from global config", len(configs))
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning("Failed to parse global MCP config %s: %s", global_config_path, e)
+
+        # Load from project .mcp.json (higher precedence - overrides global)
+        if project_config_path.exists():
+            try:
+                data = json.loads(project_config_path.read_text(encoding="utf-8"))
+                for name, config in data.get("mcpServers", {}).items():
+                    configs[name] = {
+                        "url": config.get("url"),
+                        "command": config.get("command"),
+                        "args": config.get("args", []),
+                        "env": config.get("env", {}),
+                        "headers": config.get("headers", {}),
+                        "transport": config.get("transport", "stdio"),
+                    }
+                logger.debug("Loaded %d servers from project config", len(data.get("mcpServers", {})))
+            except (json.JSONDecodeError, KeyError) as e:
+                logger.warning("Failed to parse project MCP config %s: %s", project_config_path, e)
+
+        return configs
+
     async def discover_all_tools(self, mcp_config_path: Path) -> list[MCPServerWithTools]:
         """Discover tools from all MCP servers in configuration.
 
@@ -48,16 +98,11 @@ class MCPToolDiscovery:
         """
         servers: list[MCPServerWithTools] = []
 
-        # Load MCP configuration
-        if not mcp_config_path.exists():
-            logger.debug("MCP config not found: %s", mcp_config_path)
-            return servers
+        # Load MCP configurations from both global and project configs
+        mcp_servers = self._load_mcp_configs(mcp_config_path)
 
-        try:
-            config = json.loads(mcp_config_path.read_text(encoding="utf-8"))
-            mcp_servers = config.get("mcpServers", {})
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.warning("Failed to parse MCP config %s: %s", mcp_config_path, e)
+        if not mcp_servers:
+            logger.debug("No MCP servers configured")
             return servers
 
         # Query each server concurrently with timeout
@@ -120,7 +165,8 @@ class MCPToolDiscovery:
         """
         # Check if it's HTTP or stdio server
         if "url" in server_config:
-            return await self._query_http_server(server_name, server_config["url"])
+            headers = server_config.get("headers", {})
+            return await self._query_http_server(server_name, server_config["url"], headers)
         elif "command" in server_config:
             command = server_config["command"]
             args = server_config.get("args", [])
@@ -134,12 +180,15 @@ class MCPToolDiscovery:
                 tools=[],
             )
 
-    async def _query_http_server(self, server_name: str, url: str) -> MCPServerWithTools:
+    async def _query_http_server(
+        self, server_name: str, url: str, custom_headers: dict | None = None
+    ) -> MCPServerWithTools:
         """Query an HTTP MCP server for its tools.
 
         Args:
             server_name: Name of the MCP server.
             url: HTTP/HTTPS URL of the server.
+            custom_headers: Optional custom headers from server config (e.g., API keys).
 
         Returns:
             MCPServerWithTools: Server with discovered tools.
@@ -151,6 +200,9 @@ class MCPToolDiscovery:
                     "Content-Type": "application/json",
                     "Accept": "application/json",
                 }
+                # Merge in custom headers from config (e.g., API keys)
+                if custom_headers:
+                    headers.update(custom_headers)
 
                 # First, send initialize request (MCP protocol handshake)
                 init_response = await client.post(
@@ -209,7 +261,7 @@ class MCPToolDiscovery:
             if e.response.status_code == 406:
                 # 406 Not Acceptable indicates SSE transport requirement - try SSE
                 logger.info("Falling back to SSE transport for server %s", server_name)
-                return await self._query_http_sse(url, server_name)
+                return await self._query_http_sse(url, server_name, custom_headers)
             else:
                 error_msg = f"HTTP {e.response.status_code}: {str(e)}"
             return MCPServerWithTools(
@@ -235,12 +287,15 @@ class MCPToolDiscovery:
                 tools=[],
             )
 
-    async def _query_http_sse(self, url: str, server_name: str) -> MCPServerWithTools:
+    async def _query_http_sse(
+        self, url: str, server_name: str, custom_headers: dict | None = None
+    ) -> MCPServerWithTools:
         """Query an HTTP MCP server using SSE (Server-Sent Events) transport.
 
         Args:
             url: HTTP/HTTPS URL of the server.
             server_name: Name of the MCP server.
+            custom_headers: Optional custom headers from server config (e.g., API keys).
 
         Returns:
             MCPServerWithTools: Server with discovered tools.
@@ -252,10 +307,15 @@ class MCPToolDiscovery:
                 # Step 1: Open SSE connection to get endpoint
                 endpoint_path = None
 
+                # Prepare SSE headers
+                sse_headers = {"Accept": "text/event-stream"}
+                if custom_headers:
+                    sse_headers.update(custom_headers)
+
                 async with client.stream(
                     "GET",
                     url,
-                    headers={"Accept": "text/event-stream"}
+                    headers=sse_headers
                 ) as sse_response:
                     sse_response.raise_for_status()
 
@@ -290,6 +350,11 @@ class MCPToolDiscovery:
                 message_url = urljoin(url, endpoint_path)
                 logger.debug("SSE endpoint for %s: %s", server_name, message_url)
 
+                # Prepare POST headers
+                post_headers = {"Content-Type": "application/json"}
+                if custom_headers:
+                    post_headers.update(custom_headers)
+
                 # Step 3: Send initialize request
                 init_resp = await client.post(
                     message_url,
@@ -306,7 +371,7 @@ class MCPToolDiscovery:
                         },
                         "id": 1,
                     },
-                    headers={"Content-Type": "application/json"},
+                    headers=post_headers,
                 )
                 init_resp.raise_for_status()
 
@@ -318,7 +383,7 @@ class MCPToolDiscovery:
                         "method": "tools/list",
                         "id": 2,
                     },
-                    headers={"Content-Type": "application/json"},
+                    headers=post_headers,
                 )
                 tools_resp.raise_for_status()
 
