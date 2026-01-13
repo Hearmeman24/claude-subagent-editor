@@ -574,24 +574,44 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
 
                             return (
                               <div key={server.name} className="mb-3 last:mb-0">
-                                <button
-                                  onClick={() => toggleServer(server.name)}
-                                  className="flex items-center gap-1.5 w-full text-xs font-medium text-foreground-secondary hover:text-foreground transition-colors mb-1.5"
-                                >
-                                  {expandedServers[server.name] ? (
-                                    <ChevronDown className="w-3 h-3" />
-                                  ) : (
-                                    <ChevronRight className="w-3 h-3" />
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <button
+                                    onClick={() => toggleServer(server.name)}
+                                    className="flex items-center gap-1.5 text-xs font-medium text-foreground-secondary hover:text-foreground transition-colors"
+                                  >
+                                    {expandedServers[server.name] ? (
+                                      <ChevronDown className="w-3 h-3" />
+                                    ) : (
+                                      <ChevronRight className="w-3 h-3" />
+                                    )}
+                                    <span>{server.name}</span>
+                                    {server.connected ? (
+                                      <span className="text-green-500">✓</span>
+                                    ) : (
+                                      <span className="text-amber-500" title={server.error || 'Not connected'}>
+                                        <AlertTriangle className="w-3 h-3" />
+                                      </span>
+                                    )}
+                                  </button>
+                                  {server.connected && availableTools.length > 0 && (
+                                    <button
+                                      onClick={() => {
+                                        const newTools = availableTools
+                                          .map(t => t.full_name)
+                                          .filter(name => !agentMcpTools.includes(name));
+                                        if (newTools.length > 0) {
+                                          setEditedAgent({
+                                            ...editedAgent,
+                                            tools: [...(Array.isArray(editedAgent.tools) ? editedAgent.tools : []), ...newTools]
+                                          });
+                                        }
+                                      }}
+                                      className="text-xs px-2 py-0.5 bg-blue-600 hover:bg-blue-700 rounded transition-colors"
+                                    >
+                                      Add All
+                                    </button>
                                   )}
-                                  <span>{server.name}</span>
-                                  {server.connected ? (
-                                    <span className="text-green-500">✓</span>
-                                  ) : (
-                                    <span className="text-amber-500" title={server.error || 'Not connected'}>
-                                      <AlertTriangle className="w-3 h-3" />
-                                    </span>
-                                  )}
-                                </button>
+                                </div>
                                 {expandedServers[server.name] && (
                                   <div className="pl-4 space-y-1">
                                     {!server.connected && (
@@ -675,54 +695,64 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
 
               {activeTab === 'disallowed' && (
                 <>
-                  <DragDropZone
-                    items={(() => {
-                      // Get all available tools (base tools + MCP tools) that are not in disallowed
-                      const allBaseTools = DEFAULT_CLAUDE_TOOLS
-                      const allMcpTools = mcpTools.flatMap(server =>
-                        server.tools.map(tool => tool.full_name)
-                      )
-                      const allTools = [...allBaseTools, ...allMcpTools]
-                      // Filter out:
-                      // 1. Already disallowed tools
-                      // 2. Currently ALLOWED tools (can't disallow what you're already allowing)
-                      return allTools.filter(tool =>
-                        !editedAgent.disallowedTools.includes(tool) &&
-                        !(Array.isArray(editedAgent.tools) && editedAgent.tools.includes(tool))
-                      )
-                    })()}
-                    type="tool"
-                    colorClass="text-red-400"
-                    bgClass="bg-red-900/30"
-                    onAdd={addDisallowedTool}
-                    onRemove={removeDisallowedTool}
-                    dropActive={availableDropActive}
-                    onDragOver={(e) => {
-                      handleDragOver(e)
-                      setAvailableDropActive(true)
-                    }}
-                    onDragLeave={() => setAvailableDropActive(false)}
-                    onDrop={handleAvailableDrop}
-                    label="Available"
-                    dragStartHandler={(e, item) => handleDragStart(e, 'disallowed', item, 'available')}
-                  />
-                  <DragDropZone
-                    items={editedAgent.disallowedTools}
-                    type="tool"
-                    colorClass="text-red-400"
-                    bgClass="bg-red-900/30"
-                    onAdd={addDisallowedTool}
-                    onRemove={removeDisallowedTool}
-                    dropActive={assignedDropActive}
-                    onDragOver={(e) => {
-                      handleDragOver(e)
-                      setAssignedDropActive(true)
-                    }}
-                    onDragLeave={() => setAssignedDropActive(false)}
-                    onDrop={handleAssignedDrop}
-                    label="Assigned"
-                    dragStartHandler={(e, item) => handleDragStart(e, 'disallowed', item, 'assigned')}
-                  />
+                  {allToolsEnabled ? (
+                    <div className="flex-1 flex items-center justify-center p-8 rounded border-2 border-dashed border-border bg-background-elevated">
+                      <div className="bg-blue-900/30 border border-blue-700 rounded p-4 text-blue-300 text-sm max-w-md">
+                        <strong>ALL TOOLS</strong> selected — Disallowed tools are not applicable when all tools are enabled.
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <DragDropZone
+                        items={(() => {
+                          // Get all available tools (base tools + MCP tools) that are not in disallowed
+                          const allBaseTools = DEFAULT_CLAUDE_TOOLS
+                          const allMcpTools = mcpTools.flatMap(server =>
+                            server.tools.map(tool => tool.full_name)
+                          )
+                          const allTools = [...allBaseTools, ...allMcpTools]
+                          // Filter out:
+                          // 1. Already disallowed tools
+                          // 2. Currently ALLOWED tools (can't disallow what you're already allowing)
+                          return allTools.filter(tool =>
+                            !editedAgent.disallowedTools.includes(tool) &&
+                            !(Array.isArray(editedAgent.tools) && editedAgent.tools.includes(tool))
+                          )
+                        })()}
+                        type="tool"
+                        colorClass="text-red-400"
+                        bgClass="bg-red-900/30"
+                        onAdd={addDisallowedTool}
+                        onRemove={removeDisallowedTool}
+                        dropActive={availableDropActive}
+                        onDragOver={(e) => {
+                          handleDragOver(e)
+                          setAvailableDropActive(true)
+                        }}
+                        onDragLeave={() => setAvailableDropActive(false)}
+                        onDrop={handleAvailableDrop}
+                        label="Available"
+                        dragStartHandler={(e, item) => handleDragStart(e, 'disallowed', item, 'available')}
+                      />
+                      <DragDropZone
+                        items={editedAgent.disallowedTools}
+                        type="tool"
+                        colorClass="text-red-400"
+                        bgClass="bg-red-900/30"
+                        onAdd={addDisallowedTool}
+                        onRemove={removeDisallowedTool}
+                        dropActive={assignedDropActive}
+                        onDragOver={(e) => {
+                          handleDragOver(e)
+                          setAssignedDropActive(true)
+                        }}
+                        onDragLeave={() => setAssignedDropActive(false)}
+                        onDrop={handleAssignedDrop}
+                        label="Assigned"
+                        dragStartHandler={(e, item) => handleDragStart(e, 'disallowed', item, 'assigned')}
+                      />
+                    </>
+                  )}
                 </>
               )}
             </div>
@@ -790,7 +820,12 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
   )
 }
 
+const MAX_DISPLAY_ITEMS = 10;
+
 function AgentCard({ agent, onEdit }: { agent: AgentConfig; onEdit: (agent: AgentConfig) => void }) {
+  // Separate base tools from MCP tools
+  const baseTools = agent.tools === '*' ? [] : (agent.tools as string[]).filter(t => !t.startsWith('mcp__'));
+  const mcpTools = agent.tools === '*' ? [] : (agent.tools as string[]).filter(t => t.startsWith('mcp__'));
 
   return (
     <div className="border border-border rounded-lg p-4 bg-background-elevated hover:bg-background-hover transition-colors flex flex-col h-full">
@@ -810,7 +845,7 @@ function AgentCard({ agent, onEdit }: { agent: AgentConfig; onEdit: (agent: Agen
         {agent.description}
       </p>
 
-      {(agent.tools === '*' || agent.tools.length > 0) && (
+      {(agent.tools === '*' || baseTools.length > 0) && (
         <div className="mb-3">
           <div className="text-xs text-foreground-muted mb-1.5">Tools:</div>
           <div className="flex flex-wrap gap-1.5">
@@ -819,24 +854,64 @@ function AgentCard({ agent, onEdit }: { agent: AgentConfig; onEdit: (agent: Agen
                 * (ALL TOOLS)
               </span>
             ) : (
-              (agent.tools as string[]).map((tool) => (
-                <span
-                  key={tool}
-                  className="px-2 py-1 text-xs rounded bg-tool-bg text-tool border border-tool/20"
-                >
-                  {tool}
-                </span>
-              ))
+              <>
+                {baseTools.slice(0, MAX_DISPLAY_ITEMS).map((tool) => (
+                  <span
+                    key={tool}
+                    className="px-2 py-1 text-xs rounded bg-tool-bg text-tool border border-tool/20"
+                  >
+                    {tool}
+                  </span>
+                ))}
+                {baseTools.length > MAX_DISPLAY_ITEMS && (
+                  <span className="px-2 py-1 text-xs rounded bg-zinc-700 text-zinc-400 border border-zinc-600">
+                    +{baseTools.length - MAX_DISPLAY_ITEMS} more
+                  </span>
+                )}
+              </>
             )}
           </div>
         </div>
       )}
 
+      {(() => {
+        // Group MCP tools by server
+        const mcpByServer: Record<string, string[]> = {};
+        mcpTools.forEach(tool => {
+          // Extract server name from mcp__servername__action
+          const parts = tool.split('__');
+          if (parts.length >= 2) {
+            const serverName = parts[1];
+            if (!mcpByServer[serverName]) {
+              mcpByServer[serverName] = [];
+            }
+            mcpByServer[serverName].push(tool);
+          }
+        });
+
+        return Object.keys(mcpByServer).length > 0 && (
+          <div className="mb-3">
+            <div className="text-xs text-foreground-muted mb-1.5">MCP:</div>
+            <div className="flex flex-wrap gap-1.5">
+              {Object.entries(mcpByServer).map(([server, tools]) => (
+                <span
+                  key={server}
+                  className="px-2 py-1 text-xs rounded bg-mcp-bg text-mcp border border-mcp/20"
+                  title={tools.join('\n')}
+                >
+                  {server} ({tools.length})
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
       {agent.skills.length > 0 && (
         <div className="mb-3">
           <div className="text-xs text-foreground-muted mb-1.5">Skills:</div>
           <div className="flex flex-wrap gap-1.5">
-            {agent.skills.map((skill) => (
+            {agent.skills.slice(0, MAX_DISPLAY_ITEMS).map((skill) => (
               <span
                 key={skill}
                 className="px-2 py-1 text-xs rounded bg-skill-bg text-skill border border-skill/20"
@@ -844,6 +919,11 @@ function AgentCard({ agent, onEdit }: { agent: AgentConfig; onEdit: (agent: Agen
                 {skill}
               </span>
             ))}
+            {agent.skills.length > MAX_DISPLAY_ITEMS && (
+              <span className="px-2 py-1 text-xs rounded bg-zinc-700 text-zinc-400 border border-zinc-600">
+                +{agent.skills.length - MAX_DISPLAY_ITEMS} more
+              </span>
+            )}
           </div>
         </div>
       )}
@@ -853,7 +933,7 @@ function AgentCard({ agent, onEdit }: { agent: AgentConfig; onEdit: (agent: Agen
         <div className="mb-3">
           <div className="text-xs text-foreground-muted mb-1.5">Disallowed:</div>
           <div className="flex flex-wrap gap-1.5">
-            {agent.disallowedTools.map((tool) => (
+            {agent.disallowedTools.slice(0, MAX_DISPLAY_ITEMS).map((tool) => (
               <span
                 key={tool}
                 className="px-2 py-1 text-xs rounded bg-red-900/30 text-red-400 border border-red-800/50"
@@ -861,6 +941,11 @@ function AgentCard({ agent, onEdit }: { agent: AgentConfig; onEdit: (agent: Agen
                 {tool}
               </span>
             ))}
+            {agent.disallowedTools.length > MAX_DISPLAY_ITEMS && (
+              <span className="px-2 py-1 text-xs rounded bg-zinc-700 text-zinc-400 border border-zinc-600">
+                +{agent.disallowedTools.length - MAX_DISPLAY_ITEMS} more
+              </span>
+            )}
           </div>
         </div>
       )}
