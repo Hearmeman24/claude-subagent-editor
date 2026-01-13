@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Folder, Plus } from 'lucide-react'
+import { Folder } from 'lucide-react'
 import type { AgentConfig, ProjectScanResponse } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -88,18 +88,6 @@ function AgentCard({ agent }: { agent: AgentConfig }) {
           className="text-xs text-foreground-secondary hover:text-foreground transition-colors"
         >
           Edit
-        </button>
-        <button
-          onClick={() => console.log('Delete agent:', agent.name)}
-          className="text-xs text-foreground-secondary hover:text-foreground transition-colors"
-        >
-          Delete
-        </button>
-        <button
-          onClick={() => console.log('Duplicate agent:', agent.name)}
-          className="text-xs text-foreground-secondary hover:text-foreground transition-colors"
-        >
-          Duplicate
         </button>
       </div>
     </div>
@@ -263,13 +251,6 @@ export default function App() {
                       found
                     </p>
                   </div>
-                  <button
-                    onClick={() => console.log('Create new agent')}
-                    className="flex items-center gap-2 px-4 py-2 bg-tool text-white rounded font-medium hover:bg-tool/90 transition-colors"
-                  >
-                    <Plus className="w-4 h-4" />
-                    New Agent
-                  </button>
                 </div>
 
                 {projectData.agents.length === 0 ? (
