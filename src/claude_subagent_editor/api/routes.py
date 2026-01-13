@@ -130,7 +130,7 @@ def _parse_agent_file(file_path: Path) -> AgentConfig:
 def _discover_mcp_servers(project_path: Path) -> list[str]:
     """Discover MCP servers from .mcp.json files.
 
-    Checks both the project directory and ~/.claude/mcp.json.
+    Checks both the project directory and ~/.claude.json.
 
     Args:
         project_path: The project root directory.
@@ -150,11 +150,11 @@ def _discover_mcp_servers(project_path: Path) -> list[str]:
         except (json.JSONDecodeError, KeyError):
             pass
 
-    # Check ~/.claude/mcp.json
-    home_mcp = Path.home() / ".claude" / "mcp.json"
-    if home_mcp.exists():
+    # Check global ~/.claude.json
+    global_config = Path.home() / ".claude.json"
+    if global_config.exists():
         try:
-            data = json.loads(home_mcp.read_text(encoding="utf-8"))
+            data = json.loads(global_config.read_text(encoding="utf-8"))
             if "mcpServers" in data:
                 servers.update(data["mcpServers"].keys())
         except (json.JSONDecodeError, KeyError):
@@ -484,23 +484,23 @@ async def get_mcp_tools() -> MCPToolsResponse:
             except Exception as e:
                 logger.warning("Error discovering tools from project .mcp.json: %s", e)
 
-    # Check global ~/.claude/mcp.json
-    home_mcp = Path.home() / ".claude" / "mcp.json"
-    if home_mcp.exists():
+    # Check global ~/.claude.json
+    global_config = Path.home() / ".claude.json"
+    if global_config.exists():
         try:
-            servers = await _tool_discovery.discover_all_tools(home_mcp)
+            servers = await _tool_discovery.discover_all_tools(global_config)
             # Only add servers that aren't already in all_servers
             existing_names = {s.name for s in all_servers}
             for server in servers:
                 if server.name not in existing_names:
                     all_servers.append(server)
-            logger.debug("Discovered %d servers from global mcp.json", len(servers))
+            logger.debug("Discovered %d servers from global config", len(servers))
         except Exception as e:
-            logger.warning("Error discovering tools from global mcp.json: %s", e)
+            logger.warning("Error discovering tools from global config: %s", e)
 
     # Also check .mcp.json in the working directory (for the spec requirement)
     cwd_mcp = Path.cwd() / ".mcp.json"
-    if cwd_mcp.exists() and cwd_mcp != home_mcp:
+    if cwd_mcp.exists() and cwd_mcp != global_config:
         try:
             servers = await _tool_discovery.discover_all_tools(cwd_mcp)
             existing_names = {s.name for s in all_servers}

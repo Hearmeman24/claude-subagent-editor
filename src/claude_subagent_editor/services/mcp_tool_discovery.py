@@ -262,6 +262,7 @@ class MCPToolDiscovery:
         Returns:
             list[dict] | None: List of tools or None on error.
         """
+        proc = None  # Initialize before try block
         try:
             # Prepare environment variables
             import os
@@ -337,11 +338,11 @@ class MCPToolDiscovery:
 
         except subprocess.TimeoutExpired:
             logger.warning("Subprocess timeout for command: %s", command)
-            if proc:
+            if proc is not None:
                 proc.kill()
             return None
         except Exception as e:
             logger.warning("Error in stdio sync query: %s", e)
-            if proc:
+            if proc is not None:
                 proc.terminate()
             return None
