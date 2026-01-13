@@ -121,6 +121,18 @@ class AgentResponse(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class AgentUpdateRequest(BaseModel):
+    """Request to update an agent."""
+
+    name: str = Field(..., description="Agent identifier")
+    description: str = Field(..., description="What the agent does")
+    model: ModelType = Field(..., description="Claude model to use")
+    tools: list[str] = Field(default_factory=list, description="Assigned tools")
+    skills: list[str] = Field(default_factory=list, description="Assigned skills")
+    body: str = Field(default="", description="Markdown body content")
+    model_config = {"extra": "forbid"}
+
+
 class GlobalResourcesResponse(BaseModel):
     """Response containing globally available resources."""
 

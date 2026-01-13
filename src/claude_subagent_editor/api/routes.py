@@ -11,6 +11,7 @@ from claude_subagent_editor.models.schemas import (
     AgentConfig,
     AgentListResponse,
     AgentResponse,
+    AgentUpdateRequest,
     GlobalResourcesResponse,
     HealthResponse,
     MCPServerInfo,
@@ -291,6 +292,95 @@ async def get_agent(filename: str) -> AgentResponse:
         raise HTTPException(
             status_code=500,
             detail=f"Failed to parse agent: {str(e)}",
+        )
+
+
+@router.put("/api/agent/{filename:path}", response_model=AgentResponse)
+async def update_agent(filename: str, request: AgentUpdateRequest) -> AgentResponse:
+    """Update an agent file.
+
+    Args:
+        filename: The agent filename.
+        request: The updated agent data.
+
+    Returns:
+        AgentResponse: The updated agent configuration.
+
+    Raises:
+        HTTPException: If no project has been scanned, filename is invalid,
+                      or agent cannot be updated.
+    """
+    project_path = _get_project_path()
+
+    # Path traversal protection - same checks as GET endpoint
+    if (
+        "/" in filename
+        or "\\" in filename
+        or ".." in filename
+        or filename in (".", "..")
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid filename: {filename}",
+        )
+
+    # Get agent file path
+    agents_dir = _get_agents_dir(project_path)
+    agent_file = agents_dir / filename
+
+    # Check if file exists
+    if not agent_file.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Agent not found: {filename}",
+        )
+
+    # Check if it's a file (not a directory)
+    if not agent_file.is_file():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid filename: {filename}",
+        )
+
+    # Create ParsedAgent from request
+    from claude_subagent_editor.services.agent_parser import ParsedAgent
+
+    parsed_agent = ParsedAgent(
+        filename=filename,
+        name=request.name,
+        description=request.description,
+        model=request.model.value,
+        tools=request.tools,
+        skills=request.skills,
+        body=request.body,
+    )
+
+    # Serialize to markdown with YAML frontmatter
+    try:
+        content = _parser.serialize(parsed_agent)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to serialize agent: {str(e)}",
+        )
+
+    # Write the file
+    try:
+        agent_file.write_text(content, encoding="utf-8")
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to write agent file: {str(e)}",
+        )
+
+    # Parse and return the updated agent
+    try:
+        agent_config = _parse_agent_file(agent_file)
+        return AgentResponse(agent=agent_config)
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to parse updated agent: {str(e)}",
         )
 
 
