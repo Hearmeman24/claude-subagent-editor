@@ -508,7 +508,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
 function AgentCard({ agent, onEdit }: { agent: AgentConfig; onEdit: (agent: AgentConfig) => void }) {
 
   return (
-    <div className="border border-border rounded-lg p-4 bg-background-elevated hover:bg-background-hover transition-colors">
+    <div className="border border-border rounded-lg p-4 bg-background-elevated hover:bg-background-hover transition-colors flex flex-col h-full">
       <div className="flex items-start justify-between mb-3">
         <div>
           <h3 className="font-mono text-base font-medium">{agent.name}</h3>
@@ -557,7 +557,7 @@ function AgentCard({ agent, onEdit }: { agent: AgentConfig; onEdit: (agent: Agen
         </div>
       )}
 
-      <div className="flex gap-2 mt-4 pt-3 border-t border-border-subtle">
+      <div className="flex gap-2 mt-auto pt-3 border-t border-border-subtle">
         <button
           onClick={() => onEdit(agent)}
           className="text-xs text-foreground-secondary hover:text-foreground transition-colors"
@@ -815,7 +815,7 @@ export default function App() {
                     <p className="text-sm mt-2">Create your first agent to get started</p>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 items-stretch">
                     {projectData.agents.map((agent) => (
                       <AgentCard key={agent.filename} agent={agent} onEdit={handleEditAgent} />
                     ))}
