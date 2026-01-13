@@ -166,7 +166,7 @@ async def scan_project(request: ProjectScanRequest) -> ProjectScanResponse:
     agents_dir = _get_agents_dir(project_path)
 
     if agents_dir.exists() and agents_dir.is_dir():
-        for agent_file in sorted(agents_dir.glob("*.yaml")):
+        for agent_file in sorted(agents_dir.glob("*.md")):
             try:
                 agent_config = _parse_agent_file(agent_file)
                 agents.append(agent_config)
@@ -201,7 +201,7 @@ async def list_agents() -> AgentListResponse:
     agents_dir = _get_agents_dir(project_path)
 
     if agents_dir.exists() and agents_dir.is_dir():
-        for agent_file in sorted(agents_dir.glob("*.yaml")):
+        for agent_file in sorted(agents_dir.glob("*.md")):
             try:
                 agent_config = _parse_agent_file(agent_file)
                 agents.append(agent_config)

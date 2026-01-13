@@ -29,7 +29,7 @@ def temp_project(tmp_path: Path) -> Path:
     agents_dir.mkdir(parents=True)
 
     # Create sample agent files
-    agent1 = agents_dir / "python-backend.yaml"
+    agent1 = agents_dir / "python-backend.md"
     agent1.write_text("""---
 name: python-backend-supervisor
 description: Python backend development expert
@@ -42,7 +42,7 @@ nickname: Tessa
 You are a Python backend development expert.
 """)
 
-    agent2 = agents_dir / "react-supervisor.yaml"
+    agent2 = agents_dir / "react-supervisor.md"
     agent2.write_text("""---
 name: react-supervisor
 description: React frontend development
@@ -187,7 +187,7 @@ class TestGetAgent:
 
     def test_get_agent_no_project(self, client: TestClient):
         """Test getting agent without scanning first."""
-        response = client.get("/api/agent/python-backend.yaml")
+        response = client.get("/api/agent/python-backend.md")
 
         assert response.status_code == 400
         assert "no project" in response.json()["detail"].lower()
@@ -202,13 +202,13 @@ class TestGetAgent:
         assert scan_response.status_code == 200
 
         # Then get specific agent
-        response = client.get("/api/agent/python-backend.yaml")
+        response = client.get("/api/agent/python-backend.md")
 
         assert response.status_code == 200
         data = response.json()
 
         agent = data["agent"]
-        assert agent["filename"] == "python-backend.yaml"
+        assert agent["filename"] == "python-backend.md"
         assert agent["name"] == "python-backend-supervisor"
         assert agent["description"] == "Python backend development expert"
         assert agent["model"] == "opus"
@@ -225,7 +225,7 @@ class TestGetAgent:
         assert scan_response.status_code == 200
 
         # Try to get nonexistent agent
-        response = client.get("/api/agent/nonexistent.yaml")
+        response = client.get("/api/agent/nonexistent.md")
 
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
@@ -276,7 +276,7 @@ class TestAgentData:
         """Test that agent response has all expected fields."""
         # Scan and get agent
         client.post("/api/project/scan", json={"path": str(temp_project)})
-        response = client.get("/api/agent/python-backend.yaml")
+        response = client.get("/api/agent/python-backend.md")
 
         assert response.status_code == 200
         agent = response.json()["agent"]
@@ -290,7 +290,7 @@ class TestAgentData:
         """Test that tools are returned as list."""
         # Scan and get agent
         client.post("/api/project/scan", json={"path": str(temp_project)})
-        response = client.get("/api/agent/python-backend.yaml")
+        response = client.get("/api/agent/python-backend.md")
 
         assert response.status_code == 200
         agent = response.json()["agent"]
