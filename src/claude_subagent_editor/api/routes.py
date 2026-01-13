@@ -24,7 +24,11 @@ from claude_subagent_editor.models.schemas import (
 )
 from claude_subagent_editor.services.agent_parser import AgentParser
 from claude_subagent_editor.services.discovery import ResourceDiscovery
-from claude_subagent_editor.services.mcp_tool_discovery import MCPToolDiscovery
+from claude_subagent_editor.services.mcp_tool_discovery import (
+    MCPToolDiscovery,
+    MCPServerWithTools as MCPServerWithToolsDataclass,
+    MCPToolInfo as MCPToolInfoDataclass,
+)
 
 router = APIRouter()
 
@@ -36,6 +40,36 @@ _tool_discovery = MCPToolDiscovery()
 
 # Logger
 logger = logging.getLogger(__name__)
+
+
+def _convert_dataclass_to_pydantic_server(
+    dc_server: MCPServerWithToolsDataclass,
+) -> MCPServerWithTools:
+    """Convert dataclass MCPServerWithTools to Pydantic model.
+
+    Args:
+        dc_server: Dataclass instance from discovery service.
+
+    Returns:
+        MCPServerWithTools: Pydantic model instance.
+    """
+    tools = []
+    if dc_server.tools:
+        tools = [
+            MCPToolInfo(
+                name=tool.name,
+                full_name=tool.full_name,
+                description=tool.description,
+            )
+            for tool in dc_server.tools
+        ]
+
+    return MCPServerWithTools(
+        name=dc_server.name,
+        connected=dc_server.connected,
+        error=dc_server.error,
+        tools=tools,
+    )
 
 
 def _get_project_path() -> Path:
@@ -437,7 +471,7 @@ async def get_mcp_tools() -> MCPToolsResponse:
     Returns:
         MCPToolsResponse: All discovered tools grouped by server.
     """
-    all_servers: list[MCPServerWithTools] = []
+    all_servers: list[MCPServerWithToolsDataclass] = []
 
     # Check project .mcp.json if available
     if _current_project is not None:
@@ -477,4 +511,7 @@ async def get_mcp_tools() -> MCPToolsResponse:
         except Exception as e:
             logger.warning("Error discovering tools from cwd .mcp.json: %s", e)
 
-    return MCPToolsResponse(servers=all_servers)
+    # Convert dataclass instances to Pydantic models
+    pydantic_servers = [_convert_dataclass_to_pydantic_server(s) for s in all_servers]
+
+    return MCPToolsResponse(servers=pydantic_servers)
