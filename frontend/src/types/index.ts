@@ -22,3 +22,9 @@ export interface HealthResponse {
   status: string
   version: string
 }
+
+export interface Project {
+  path: string
+  name: string
+  lastOpened?: string
+}

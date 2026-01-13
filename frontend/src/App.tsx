@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { Folder } from 'lucide-react'
+import { Folder, ArrowLeft } from 'lucide-react'
 import type { AgentConfig, ProjectScanResponse } from '@/types'
 import { cn } from '@/lib/utils'
+import ProjectPicker from '@/components/ProjectPicker'
 
 interface BaseTool {
   name: string
@@ -163,26 +164,26 @@ function ResourceSidebar({
   )
 }
 
+type ViewState = 'projects' | 'agents'
+
 export default function App() {
-  const [projectPath, setProjectPath] = useState('')
+  const [viewState, setViewState] = useState<ViewState>('projects')
+  const [currentProjectPath, setCurrentProjectPath] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [projectData, setProjectData] = useState<ProjectScanResponse | null>(null)
 
-  const scanProject = async () => {
-    if (!projectPath.trim()) {
-      setError('Please enter a project path')
-      return
-    }
-
+  const handleSelectProject = async (path: string) => {
+    setCurrentProjectPath(path)
     setLoading(true)
     setError(null)
+    setViewState('agents')
 
     try {
       const response = await fetch('/api/project/scan', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: projectPath }),
+        body: JSON.stringify({ path }),
       })
 
       if (!response.ok) {
@@ -193,9 +194,21 @@ export default function App() {
       setProjectData(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to scan project')
+      setViewState('projects')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleBackToProjects = () => {
+    setViewState('projects')
+    setProjectData(null)
+    setCurrentProjectPath('')
+    setError(null)
+  }
+
+  if (viewState === 'projects') {
+    return <ProjectPicker onSelectProject={handleSelectProject} />
   }
 
   const allMcpServers = projectData ? projectData.mcp_servers : []
@@ -204,26 +217,20 @@ export default function App() {
     <div className="h-screen flex flex-col">
       <header className="border-b border-border bg-background-elevated px-6 py-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Claude Subagent Editor</h1>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2">
-              <Folder className="w-4 h-4 text-foreground-muted" />
-              <input
-                type="text"
-                value={projectPath}
-                onChange={(e) => setProjectPath(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && scanProject()}
-                placeholder="Enter project path..."
-                className="px-3 py-1.5 bg-background border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-tool/50 w-80"
-              />
-            </div>
             <button
-              onClick={scanProject}
-              disabled={loading}
-              className="px-4 py-1.5 bg-tool text-white rounded text-sm font-medium hover:bg-tool/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              onClick={handleBackToProjects}
+              className="p-2 hover:bg-background-hover rounded transition-colors"
+              title="Back to projects"
             >
-              {loading ? 'Scanning...' : 'Scan'}
+              <ArrowLeft className="w-5 h-5" />
             </button>
+            <div>
+              <h1 className="text-xl font-semibold">Claude Subagent Editor</h1>
+              {currentProjectPath && (
+                <p className="text-sm text-foreground-secondary">{currentProjectPath}</p>
+              )}
+            </div>
           </div>
         </div>
         {error && (
@@ -234,7 +241,7 @@ export default function App() {
       </header>
 
       <div className="flex-1 flex overflow-hidden">
-        {projectData && (
+        {projectData && !loading && (
           <>
             <ResourceSidebar
               tools={BASE_TOOLS}
@@ -275,18 +282,6 @@ export default function App() {
             <div className="text-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-tool mx-auto mb-4"></div>
               <p className="text-foreground-secondary">Scanning project...</p>
-            </div>
-          </div>
-        )}
-
-        {!projectData && !loading && (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <Folder className="w-16 h-16 text-foreground-muted mx-auto mb-4" />
-              <h2 className="text-xl font-semibold mb-2">Welcome to Claude Subagent Editor</h2>
-              <p className="text-foreground-secondary mb-4">
-                Enter a project path above to get started
-              </p>
             </div>
           </div>
         )}
