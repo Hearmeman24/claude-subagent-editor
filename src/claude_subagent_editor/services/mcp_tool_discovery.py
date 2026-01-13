@@ -56,6 +56,10 @@ class MCPToolDiscovery:
             try:
                 data = json.loads(global_config_path.read_text(encoding="utf-8"))
                 for name, config in data.get("mcpServers", {}).items():
+                    # Skip servers without url or command
+                    if not config.get("url") and not config.get("command"):
+                        logger.debug("Skipping server %s: no url or command", name)
+                        continue
                     configs[name] = {
                         "url": config.get("url"),
                         "command": config.get("command"),
@@ -73,6 +77,10 @@ class MCPToolDiscovery:
             try:
                 data = json.loads(project_config_path.read_text(encoding="utf-8"))
                 for name, config in data.get("mcpServers", {}).items():
+                    # Skip servers without url or command
+                    if not config.get("url") and not config.get("command"):
+                        logger.debug("Skipping server %s: no url or command", name)
+                        continue
                     configs[name] = {
                         "url": config.get("url"),
                         "command": config.get("command"),
@@ -164,11 +172,13 @@ class MCPToolDiscovery:
             MCPServerWithTools: Server with discovered tools.
         """
         # Check if it's HTTP or stdio server
-        if "url" in server_config:
+        url = server_config.get("url")
+        command = server_config.get("command")
+
+        if url:
             headers = server_config.get("headers", {})
-            return await self._query_http_server(server_name, server_config["url"], headers)
-        elif "command" in server_config:
-            command = server_config["command"]
+            return await self._query_http_server(server_name, url, headers)
+        elif command:
             args = server_config.get("args", [])
             env = server_config.get("env", {})
             return await self._query_stdio_server(server_name, command, args, env)
