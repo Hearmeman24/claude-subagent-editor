@@ -133,6 +133,34 @@ class AgentUpdateRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class MCPToolInfo(BaseModel):
+    """Information about a discovered MCP tool."""
+
+    name: str = Field(..., description="Original tool name from server")
+    full_name: str = Field(..., description="Full name with prefix: mcp__server__tool")
+    description: str | None = Field(None, description="Tool description")
+    model_config = {"extra": "forbid"}
+
+
+class MCPServerWithTools(BaseModel):
+    """MCP server with its discovered tools."""
+
+    name: str = Field(..., description="MCP server name")
+    connected: bool = Field(..., description="Whether server is connected")
+    error: str | None = Field(None, description="Error message if connection failed")
+    tools: list[MCPToolInfo] = Field(default_factory=list, description="List of tools")
+    model_config = {"extra": "forbid"}
+
+
+class MCPToolsResponse(BaseModel):
+    """Response containing MCP tools from all servers."""
+
+    servers: list[MCPServerWithTools] = Field(
+        default_factory=list, description="List of servers with their tools"
+    )
+    model_config = {"extra": "forbid"}
+
+
 class GlobalResourcesResponse(BaseModel):
     """Response containing globally available resources."""
 

@@ -15,12 +15,16 @@ from claude_subagent_editor.models.schemas import (
     GlobalResourcesResponse,
     HealthResponse,
     MCPServerInfo,
+    MCPServerWithTools,
+    MCPToolInfo,
+    MCPToolsResponse,
     ProjectScanRequest,
     ProjectScanResponse,
     SkillInfo,
 )
 from claude_subagent_editor.services.agent_parser import AgentParser
 from claude_subagent_editor.services.discovery import ResourceDiscovery
+from claude_subagent_editor.services.mcp_tool_discovery import MCPToolDiscovery
 
 router = APIRouter()
 
@@ -28,6 +32,7 @@ router = APIRouter()
 _current_project: Path | None = None
 _parser = AgentParser()
 _discovery = ResourceDiscovery()
+_tool_discovery = MCPToolDiscovery()
 
 # Logger
 logger = logging.getLogger(__name__)
@@ -415,3 +420,59 @@ async def get_global_resources() -> GlobalResourcesResponse:
     ]
 
     return GlobalResourcesResponse(skills=skills, mcp_servers=mcp_servers)
+
+
+@router.get("/api/mcp/tools", response_model=MCPToolsResponse)
+async def get_mcp_tools() -> MCPToolsResponse:
+    """Get all MCP tools from all configured servers.
+
+    This endpoint queries MCP servers from both project and global .mcp.json files,
+    connects to each server, and retrieves their available tools.
+
+    Tool names follow the convention: mcp__server-name__tool-name
+    For example: mcp__playwright__browser_click
+
+    Returns:
+        MCPToolsResponse: All discovered tools grouped by server.
+    """
+    all_servers: list[MCPServerWithTools] = []
+
+    # Check project .mcp.json if available
+    if _current_project is not None:
+        project_mcp = _current_project / ".mcp.json"
+        if project_mcp.exists():
+            try:
+                servers = await _tool_discovery.discover_all_tools(project_mcp)
+                all_servers.extend(servers)
+                logger.debug("Discovered %d servers from project .mcp.json", len(servers))
+            except Exception as e:
+                logger.warning("Error discovering tools from project .mcp.json: %s", e)
+
+    # Check global ~/.claude/mcp.json
+    home_mcp = Path.home() / ".claude" / "mcp.json"
+    if home_mcp.exists():
+        try:
+            servers = await _tool_discovery.discover_all_tools(home_mcp)
+            # Only add servers that aren't already in all_servers
+            existing_names = {s.name for s in all_servers}
+            for server in servers:
+                if server.name not in existing_names:
+                    all_servers.append(server)
+            logger.debug("Discovered %d servers from global mcp.json", len(servers))
+        except Exception as e:
+            logger.warning("Error discovering tools from global mcp.json: %s", e)
+
+    # Also check .mcp.json in the working directory (for the spec requirement)
+    cwd_mcp = Path.cwd() / ".mcp.json"
+    if cwd_mcp.exists() and cwd_mcp != home_mcp:
+        try:
+            servers = await _tool_discovery.discover_all_tools(cwd_mcp)
+            existing_names = {s.name for s in all_servers}
+            for server in servers:
+                if server.name not in existing_names:
+                    all_servers.append(server)
+            logger.debug("Discovered %d servers from cwd .mcp.json", len(servers))
+        except Exception as e:
+            logger.warning("Error discovering tools from cwd .mcp.json: %s", e)
+
+    return MCPToolsResponse(servers=all_servers)
