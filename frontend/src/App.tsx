@@ -412,23 +412,31 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
                     label="Available"
                     dragStartHandler={(e, item) => handleDragStart(e, 'skill', item, 'available')}
                   />
-                  <DragDropZone
-                    items={editedAgent.skills}
-                    type="skill"
-                    colorClass="text-skill"
-                    bgClass="bg-skill-bg"
-                    onAdd={addSkill}
-                    onRemove={removeSkill}
-                    dropActive={assignedDropActive}
-                    onDragOver={(e) => {
-                      handleDragOver(e)
-                      setAssignedDropActive(true)
-                    }}
-                    onDragLeave={() => setAssignedDropActive(false)}
-                    onDrop={handleAssignedDrop}
-                    label="Assigned"
-                    dragStartHandler={(e, item) => handleDragStart(e, 'skill', item, 'assigned')}
-                  />
+                  <div className="flex-1">
+                    <DragDropZone
+                      items={editedAgent.skills}
+                      type="skill"
+                      colorClass="text-skill"
+                      bgClass="bg-skill-bg"
+                      onAdd={addSkill}
+                      onRemove={removeSkill}
+                      dropActive={assignedDropActive}
+                      onDragOver={(e) => {
+                        handleDragOver(e)
+                        setAssignedDropActive(true)
+                      }}
+                      onDragLeave={() => setAssignedDropActive(false)}
+                      onDrop={handleAssignedDrop}
+                      label="Assigned"
+                      dragStartHandler={(e, item) => handleDragStart(e, 'skill', item, 'assigned')}
+                    />
+                    {editedAgent.skills.length > 0 && !editedAgent.tools.includes('Skill') && (
+                      <div className="text-amber-500 text-sm mt-2 flex items-center gap-1.5">
+                        <span>⚠</span>
+                        <span>The "Skill" base tool is required to invoke skills</span>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
 
