@@ -46,7 +46,10 @@ async def test_discover_all_tools_empty_config(tool_discovery, tmp_path):
     config_path = tmp_path / ".mcp.json"
     config_path.write_text("{}")
 
-    result = await tool_discovery.discover_all_tools(config_path)
+    # Mock Path.home() to prevent loading from ~/.claude.json
+    with patch("pathlib.Path.home") as mock_home:
+        mock_home.return_value = tmp_path / "mock_home"
+        result = await tool_discovery.discover_all_tools(config_path)
 
     assert result == []
 
@@ -56,7 +59,10 @@ async def test_discover_all_tools_missing_file(tool_discovery, tmp_path):
     """Test discovering tools from non-existent config file."""
     config_path = tmp_path / "missing.json"
 
-    result = await tool_discovery.discover_all_tools(config_path)
+    # Mock Path.home() to prevent loading from ~/.claude.json
+    with patch("pathlib.Path.home") as mock_home:
+        mock_home.return_value = tmp_path / "mock_home"
+        result = await tool_discovery.discover_all_tools(config_path)
 
     assert result == []
 
