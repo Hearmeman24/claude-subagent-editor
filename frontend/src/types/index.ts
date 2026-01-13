@@ -1,39 +1,21 @@
 export type ModelType = 'opus' | 'sonnet' | 'haiku'
 
 export interface AgentConfig {
+  filename: string
   name: string
   description: string
   model: ModelType
-  tools?: string[]
-  skills?: string[]
-  nickname?: string
-  filename: string
-  markdown_body: string
-}
-
-export interface MCPServer {
-  name: string
-  command: string
-  args: string[]
-  env?: Record<string, string>
-}
-
-export interface Skill {
-  name: string
-  description: string
-}
-
-export interface BaseTool {
-  name: string
-  category: 'file' | 'execution' | 'code' | 'web' | 'notebook' | 'utility'
+  tools: string[]
+  skills: string[]
+  nickname: string | null
+  body: string
 }
 
 export interface ProjectScanResponse {
+  path: string
   agents: AgentConfig[]
-  project_mcp_servers: MCPServer[]
-  global_mcp_servers: MCPServer[]
-  skills: Skill[]
-  project_path: string
+  mcp_servers: string[]
+  agent_count: number
 }
 
 export interface HealthResponse {

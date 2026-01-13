@@ -1,7 +1,12 @@
 import { useState } from 'react'
 import { Folder, Plus } from 'lucide-react'
-import type { AgentConfig, ProjectScanResponse, BaseTool, MCPServer, Skill } from '@/types'
+import type { AgentConfig, ProjectScanResponse } from '@/types'
 import { cn } from '@/lib/utils'
+
+interface BaseTool {
+  name: string
+  category: 'file' | 'execution' | 'code' | 'web' | 'notebook' | 'utility'
+}
 
 const BASE_TOOLS: BaseTool[] = [
   { name: 'Read', category: 'file' },
@@ -45,7 +50,7 @@ function AgentCard({ agent }: { agent: AgentConfig }) {
         {agent.description}
       </p>
 
-      {agent.tools && agent.tools.length > 0 && (
+      {agent.tools.length > 0 && (
         <div className="mb-3">
           <div className="text-xs text-foreground-muted mb-1.5">Tools:</div>
           <div className="flex flex-wrap gap-1.5">
@@ -61,7 +66,7 @@ function AgentCard({ agent }: { agent: AgentConfig }) {
         </div>
       )}
 
-      {agent.skills && agent.skills.length > 0 && (
+      {agent.skills.length > 0 && (
         <div className="mb-3">
           <div className="text-xs text-foreground-muted mb-1.5">Skills:</div>
           <div className="flex flex-wrap gap-1.5">
@@ -104,16 +109,13 @@ function AgentCard({ agent }: { agent: AgentConfig }) {
 function ResourceSidebar({
   tools,
   mcpServers,
-  skills,
 }: {
   tools: BaseTool[]
-  mcpServers: MCPServer[]
-  skills: Skill[]
+  mcpServers: string[]
 }) {
   const [expandedSections, setExpandedSections] = useState({
     tools: true,
     mcp: true,
-    skills: true,
   })
 
   const toggleSection = (section: keyof typeof expandedSections) => {
@@ -159,33 +161,10 @@ function ResourceSidebar({
             <div className="space-y-1 pl-2">
               {mcpServers.map((server) => (
                 <div
-                  key={server.name}
+                  key={server}
                   className="text-xs px-2 py-1.5 rounded hover:bg-background-hover cursor-grab text-mcp"
                 >
-                  {server.name}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        <div>
-          <button
-            onClick={() => toggleSection('skills')}
-            className="flex items-center justify-between w-full text-sm font-medium mb-2 hover:text-foreground transition-colors"
-          >
-            <span>Skills ({skills.length})</span>
-            <span className="text-xs">{expandedSections.skills ? '▼' : '▸'}</span>
-          </button>
-          {expandedSections.skills && (
-            <div className="space-y-1 pl-2">
-              {skills.map((skill) => (
-                <div
-                  key={skill.name}
-                  className="text-xs px-2 py-1.5 rounded hover:bg-background-hover cursor-grab text-skill"
-                  title={skill.description}
-                >
-                  {skill.name}
+                  {server}
                 </div>
               ))}
             </div>
@@ -231,9 +210,7 @@ export default function App() {
     }
   }
 
-  const allMcpServers = projectData
-    ? [...projectData.project_mcp_servers, ...projectData.global_mcp_servers]
-    : []
+  const allMcpServers = projectData ? projectData.mcp_servers : []
 
   return (
     <div className="h-screen flex flex-col">
@@ -274,7 +251,6 @@ export default function App() {
             <ResourceSidebar
               tools={BASE_TOOLS}
               mcpServers={allMcpServers}
-              skills={projectData.skills}
             />
 
             <main className="flex-1 overflow-y-auto p-6">
@@ -298,7 +274,7 @@ export default function App() {
 
                 {projectData.agents.length === 0 ? (
                   <div className="text-center py-12 text-foreground-muted">
-                    <p>No agents found in {projectData.project_path}/.claude/agents/</p>
+                    <p>No agents found in {projectData.path}/.claude/agents/</p>
                     <p className="text-sm mt-2">Create your first agent to get started</p>
                   </div>
                 ) : (
