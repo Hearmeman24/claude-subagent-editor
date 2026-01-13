@@ -130,9 +130,9 @@ class AgentUpdateRequest(BaseModel):
     model: ModelType = Field(..., description="Claude model to use")
     tools: list[str] | str = Field(default_factory=list, description="Assigned tools (list or '*' for all)")
     skills: list[str] = Field(default_factory=list, description="Assigned skills")
-    disallowed_tools: list[str] = Field(default_factory=list, description="Tools to exclude when using '*'")
+    disallowed_tools: list[str] = Field(default_factory=list, alias="disallowedTools", description="Tools to exclude when using '*'")
     body: str = Field(default="", description="Markdown body content")
-    model_config = {"extra": "forbid"}
+    model_config = {"extra": "forbid", "populate_by_name": True}
 
 
 class MCPToolInfo(BaseModel):
