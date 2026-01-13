@@ -137,10 +137,20 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
 
   const handleSave = async () => {
     try {
+      // Only send fields the backend expects (exclude filename, nickname)
+      const payload = {
+        name: editedAgent.name,
+        description: editedAgent.description,
+        model: editedAgent.model,
+        tools: editedAgent.tools,
+        skills: editedAgent.skills,
+        body: editedAgent.body,
+      };
+
       const response = await fetch(`/api/agent/${agent.filename}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(editedAgent),
+        body: JSON.stringify(payload),
       })
 
       if (!response.ok) {
