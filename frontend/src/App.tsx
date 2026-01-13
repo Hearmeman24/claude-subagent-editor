@@ -124,15 +124,6 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
   const [expandedServers, setExpandedServers] = useState<Record<string, boolean>>({})
   const [manualMcpInput, setManualMcpInput] = useState('')
 
-  // Auto-expand all servers when mcpTools change
-  useEffect(() => {
-    const expanded: Record<string, boolean> = {}
-    mcpTools.forEach((server: MCPServerWithTools) => {
-      expanded[server.name] = true
-    })
-    setExpandedServers(expanded)
-  }, [mcpTools])
-
   // Separate base tools from MCP tools in agent's tools array
   const allToolsEnabled = editedAgent.tools === '*'
   const agentBaseTools = allToolsEnabled ? [] : (editedAgent.tools as string[]).filter(t => !t.startsWith('mcp__'))
@@ -861,8 +852,8 @@ function ResourceSidebar({
 }) {
   const [expandedSections, setExpandedSections] = useState({
     baseTools: true,
-    skills: true,
-    mcp: true,
+    skills: false,
+    mcp: false,
   })
 
   const toggleSection = (section: keyof typeof expandedSections) => {
