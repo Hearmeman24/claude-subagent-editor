@@ -10,6 +10,23 @@ const modelColors = {
   haiku: 'text-haiku',
 }
 
+const DEFAULT_CLAUDE_TOOLS = [
+  'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep',
+  'Task', 'WebFetch', 'WebSearch', 'NotebookEdit',
+  'TodoWrite', 'AskUserQuestion', 'Skill'
+]
+
+// Helper to convert MCP server name to wildcard format
+const toMcpWildcard = (serverName: string): string =>
+  `mcp__${serverName.toLowerCase().replace(/-/g, '_')}__*`
+
+// Helper to extract server name from MCP wildcard
+const fromMcpWildcard = (wildcard: string): string | null => {
+  const match = wildcard.match(/^mcp__(.+)__\*$/)
+  if (!match) return null
+  return match[1].replace(/_/g, '-')
+}
+
 interface AgentEditorProps {
   agent: AgentConfig
   onClose: () => void
@@ -19,7 +36,7 @@ interface AgentEditorProps {
 
 interface DragDropZoneProps {
   items: string[]
-  type: 'skill' | 'tool'
+  type: 'skill' | 'tool' | 'mcp'
   colorClass: string
   bgClass: string
   onAdd: (item: string) => void
@@ -93,18 +110,30 @@ function DragDropZone({
 
 function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorProps) {
   const [editedAgent, setEditedAgent] = useState<AgentConfig>({ ...agent })
-  const [activeTab, setActiveTab] = useState<'skills' | 'tools'>('skills')
+  const [activeTab, setActiveTab] = useState<'tools' | 'skills' | 'mcp'>('tools')
   const [availableDropActive, setAvailableDropActive] = useState(false)
   const [assignedDropActive, setAssignedDropActive] = useState(false)
+
+  // Separate base tools from MCP tools in agent's tools array
+  const agentBaseTools = editedAgent.tools.filter(t => !t.startsWith('mcp__'))
+  const agentMcpTools = editedAgent.tools.filter(t => t.startsWith('mcp__'))
+
+  // Get assigned MCP server names from wildcards
+  const assignedMcpServers = agentMcpTools
+    .map(fromMcpWildcard)
+    .filter((name): name is string => name !== null)
 
   // Filter available items to exclude already assigned ones
   const availableSkills = globalResources.skills
     .map((s) => s.name)
     .filter((name) => !editedAgent.skills.includes(name))
 
-  const availableTools = globalResources.mcp_servers
+  const availableBaseTools = DEFAULT_CLAUDE_TOOLS
+    .filter((name) => !agentBaseTools.includes(name))
+
+  const availableMcpServers = globalResources.mcp_servers
     .map((s) => s.name)
-    .filter((name) => !editedAgent.tools.includes(name))
+    .filter((name) => !assignedMcpServers.includes(name))
 
   const handleSave = async () => {
     try {
@@ -126,7 +155,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
     }
   }
 
-  const addTool = (tool: string) => {
+  const addBaseTool = (tool: string) => {
     if (!editedAgent.tools.includes(tool)) {
       setEditedAgent({
         ...editedAgent,
@@ -135,10 +164,28 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
     }
   }
 
-  const removeTool = (tool: string) => {
+  const removeBaseTool = (tool: string) => {
     setEditedAgent({
       ...editedAgent,
       tools: editedAgent.tools.filter((t) => t !== tool),
+    })
+  }
+
+  const addMcpServer = (serverName: string) => {
+    const wildcard = toMcpWildcard(serverName)
+    if (!editedAgent.tools.includes(wildcard)) {
+      setEditedAgent({
+        ...editedAgent,
+        tools: [...editedAgent.tools, wildcard],
+      })
+    }
+  }
+
+  const removeMcpServer = (serverName: string) => {
+    const wildcard = toMcpWildcard(serverName)
+    setEditedAgent({
+      ...editedAgent,
+      tools: editedAgent.tools.filter((t) => t !== wildcard),
     })
   }
 
@@ -158,7 +205,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
     })
   }
 
-  const handleDragStart = (e: React.DragEvent, type: 'skill' | 'tool', name: string, source: 'available' | 'assigned') => {
+  const handleDragStart = (e: React.DragEvent, type: 'skill' | 'tool' | 'mcp', name: string, source: 'available' | 'assigned') => {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', JSON.stringify({ type, name, source }))
   }
@@ -173,7 +220,9 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
         if (activeTab === 'skills' && data.type === 'skill') {
           removeSkill(data.name)
         } else if (activeTab === 'tools' && data.type === 'tool') {
-          removeTool(data.name)
+          removeBaseTool(data.name)
+        } else if (activeTab === 'mcp' && data.type === 'mcp') {
+          removeMcpServer(data.name)
         }
       }
     } catch (err) {
@@ -191,7 +240,9 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
         if (activeTab === 'skills' && data.type === 'skill') {
           addSkill(data.name)
         } else if (activeTab === 'tools' && data.type === 'tool') {
-          addTool(data.name)
+          addBaseTool(data.name)
+        } else if (activeTab === 'mcp' && data.type === 'mcp') {
+          addMcpServer(data.name)
         }
       }
     } catch (err) {
@@ -257,6 +308,17 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
           <div className="border-t border-border pt-4">
             <div className="flex gap-4 mb-4">
               <button
+                onClick={() => setActiveTab('tools')}
+                className={cn(
+                  'px-4 py-2 text-sm font-medium transition-colors border-b-2',
+                  activeTab === 'tools'
+                    ? 'border-tool text-tool'
+                    : 'border-transparent text-foreground-secondary hover:text-foreground'
+                )}
+              >
+                Tools
+              </button>
+              <button
                 onClick={() => setActiveTab('skills')}
                 className={cn(
                   'px-4 py-2 text-sm font-medium transition-colors border-b-2',
@@ -268,20 +330,59 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
                 Skills
               </button>
               <button
-                onClick={() => setActiveTab('tools')}
+                onClick={() => setActiveTab('mcp')}
                 className={cn(
                   'px-4 py-2 text-sm font-medium transition-colors border-b-2',
-                  activeTab === 'tools'
-                    ? 'border-tool text-tool'
+                  activeTab === 'mcp'
+                    ? 'border-mcp text-mcp'
                     : 'border-transparent text-foreground-secondary hover:text-foreground'
                 )}
               >
-                Tools
+                MCP
               </button>
             </div>
 
             {/* Two-column drag-drop */}
             <div className="flex gap-4">
+              {activeTab === 'tools' && (
+                <>
+                  <DragDropZone
+                    items={availableBaseTools}
+                    type="tool"
+                    colorClass="text-tool"
+                    bgClass="bg-tool-bg"
+                    onAdd={addBaseTool}
+                    onRemove={removeBaseTool}
+                    dropActive={availableDropActive}
+                    onDragOver={(e) => {
+                      handleDragOver(e)
+                      setAvailableDropActive(true)
+                    }}
+                    onDragLeave={() => setAvailableDropActive(false)}
+                    onDrop={handleAvailableDrop}
+                    label="Available"
+                    dragStartHandler={(e, item) => handleDragStart(e, 'tool', item, 'available')}
+                  />
+                  <DragDropZone
+                    items={agentBaseTools}
+                    type="tool"
+                    colorClass="text-tool"
+                    bgClass="bg-tool-bg"
+                    onAdd={addBaseTool}
+                    onRemove={removeBaseTool}
+                    dropActive={assignedDropActive}
+                    onDragOver={(e) => {
+                      handleDragOver(e)
+                      setAssignedDropActive(true)
+                    }}
+                    onDragLeave={() => setAssignedDropActive(false)}
+                    onDrop={handleAssignedDrop}
+                    label="Assigned"
+                    dragStartHandler={(e, item) => handleDragStart(e, 'tool', item, 'assigned')}
+                  />
+                </>
+              )}
+
               {activeTab === 'skills' && (
                 <>
                   <DragDropZone
@@ -321,15 +422,15 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
                 </>
               )}
 
-              {activeTab === 'tools' && (
+              {activeTab === 'mcp' && (
                 <>
                   <DragDropZone
-                    items={availableTools}
-                    type="tool"
-                    colorClass="text-tool"
-                    bgClass="bg-tool-bg"
-                    onAdd={addTool}
-                    onRemove={removeTool}
+                    items={availableMcpServers}
+                    type="mcp"
+                    colorClass="text-mcp"
+                    bgClass="bg-mcp-bg"
+                    onAdd={addMcpServer}
+                    onRemove={removeMcpServer}
                     dropActive={availableDropActive}
                     onDragOver={(e) => {
                       handleDragOver(e)
@@ -338,15 +439,15 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
                     onDragLeave={() => setAvailableDropActive(false)}
                     onDrop={handleAvailableDrop}
                     label="Available"
-                    dragStartHandler={(e, item) => handleDragStart(e, 'tool', item, 'available')}
+                    dragStartHandler={(e, item) => handleDragStart(e, 'mcp', item, 'available')}
                   />
                   <DragDropZone
-                    items={editedAgent.tools}
-                    type="tool"
-                    colorClass="text-tool"
-                    bgClass="bg-tool-bg"
-                    onAdd={addTool}
-                    onRemove={removeTool}
+                    items={assignedMcpServers}
+                    type="mcp"
+                    colorClass="text-mcp"
+                    bgClass="bg-mcp-bg"
+                    onAdd={addMcpServer}
+                    onRemove={removeMcpServer}
                     dropActive={assignedDropActive}
                     onDragOver={(e) => {
                       handleDragOver(e)
@@ -355,7 +456,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
                     onDragLeave={() => setAssignedDropActive(false)}
                     onDrop={handleAssignedDrop}
                     label="Assigned"
-                    dragStartHandler={(e, item) => handleDragStart(e, 'tool', item, 'assigned')}
+                    dragStartHandler={(e, item) => handleDragStart(e, 'mcp', item, 'assigned')}
                   />
                 </>
               )}
@@ -466,6 +567,7 @@ function ResourceSidebar({
   mcpServers: MCPServerInfo[]
 }) {
   const [expandedSections, setExpandedSections] = useState({
+    baseTools: true,
     skills: true,
     mcp: true,
   })
@@ -484,6 +586,29 @@ function ResourceSidebar({
       <h2 className="text-sm font-semibold mb-4">Available Resources</h2>
 
       <div className="space-y-4">
+        <div>
+          <button
+            onClick={() => toggleSection('baseTools')}
+            className="flex items-center justify-between w-full text-sm font-medium mb-2 hover:text-foreground transition-colors"
+          >
+            <span>Base Tools ({DEFAULT_CLAUDE_TOOLS.length})</span>
+            <span className="text-xs">{expandedSections.baseTools ? '▼' : '▸'}</span>
+          </button>
+          {expandedSections.baseTools && (
+            <div className="space-y-1 pl-2">
+              {DEFAULT_CLAUDE_TOOLS.map((tool) => (
+                <div
+                  key={tool}
+                  className="text-xs px-2 py-1.5 rounded text-tool"
+                  title={tool}
+                >
+                  {tool}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div>
           <button
             onClick={() => toggleSection('skills')}
