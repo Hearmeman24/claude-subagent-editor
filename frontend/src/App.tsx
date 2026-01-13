@@ -13,7 +13,7 @@ const modelColors = {
 const DEFAULT_CLAUDE_TOOLS = [
   'Read', 'Write', 'Edit', 'Bash', 'Glob', 'Grep',
   'Task', 'WebFetch', 'WebSearch', 'NotebookEdit',
-  'TodoWrite', 'AskUserQuestion', 'Skill'
+  'TodoWrite', 'AskUserQuestion', 'Skill', 'LSP'
 ]
 
 // Helper to convert MCP server name to wildcard format
