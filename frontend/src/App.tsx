@@ -137,7 +137,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
 
   const handleSave = async () => {
     try {
-      const response = await fetch(`/api/agents/${agent.filename}`, {
+      const response = await fetch(`/api/agent/${agent.filename}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editedAgent),
