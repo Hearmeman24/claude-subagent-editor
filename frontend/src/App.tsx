@@ -14,14 +14,97 @@ interface AgentEditorProps {
   agent: AgentConfig
   onClose: () => void
   onSave: (updatedAgent: AgentConfig) => void
+  globalResources: GlobalResourcesResponse
 }
 
-function AgentEditor({ agent, onClose, onSave }: AgentEditorProps) {
+interface DragDropZoneProps {
+  items: string[]
+  type: 'skill' | 'tool'
+  colorClass: string
+  bgClass: string
+  onAdd: (item: string) => void
+  onRemove: (item: string) => void
+  dropActive: boolean
+  onDragOver: (e: React.DragEvent) => void
+  onDragLeave: () => void
+  onDrop: (e: React.DragEvent) => void
+  label: string
+  dragStartHandler: (e: React.DragEvent, item: string) => void
+}
+
+function DragDropZone({
+  items,
+  type,
+  colorClass,
+  bgClass,
+  onRemove,
+  dropActive,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  label,
+  dragStartHandler,
+}: DragDropZoneProps) {
+  return (
+    <div className="flex-1">
+      <div className="text-xs font-medium text-foreground-secondary mb-2">{label}</div>
+      <div
+        onDrop={onDrop}
+        onDragOver={onDragOver}
+        onDragLeave={onDragLeave}
+        className={cn(
+          'min-h-[200px] max-h-[200px] overflow-y-auto p-3 rounded border-2 border-dashed transition-colors',
+          dropActive ? `border-${type} bg-${type}/10` : 'border-border bg-background-elevated',
+          'flex flex-wrap gap-2 content-start'
+        )}
+      >
+        {items.length === 0 && (
+          <span className="text-xs text-foreground-muted italic">
+            {label === 'Available' ? 'No more items available' : 'Drag items here'}
+          </span>
+        )}
+        {items.map((item) => (
+          <span
+            key={item}
+            draggable
+            onDragStart={(e) => dragStartHandler(e, item)}
+            className={cn(
+              'px-2 py-1 text-xs rounded border flex items-center gap-1.5 h-fit cursor-grab active:cursor-grabbing',
+              bgClass,
+              colorClass,
+              `border-${type}/20`
+            )}
+          >
+            {item}
+            {label === 'Assigned' && (
+              <button
+                onClick={() => onRemove(item)}
+                className="hover:text-foreground transition-colors"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            )}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorProps) {
   const [editedAgent, setEditedAgent] = useState<AgentConfig>({ ...agent })
-  const [toolInput, setToolInput] = useState('')
-  const [skillInput, setSkillInput] = useState('')
-  const [toolsDropActive, setToolsDropActive] = useState(false)
-  const [skillsDropActive, setSkillsDropActive] = useState(false)
+  const [activeTab, setActiveTab] = useState<'skills' | 'tools'>('skills')
+  const [availableDropActive, setAvailableDropActive] = useState(false)
+  const [assignedDropActive, setAssignedDropActive] = useState(false)
+
+  // Filter available items to exclude already assigned ones
+  const availableSkills = globalResources.skills
+    .map((s) => s.name)
+    .filter((name) => !editedAgent.skills.includes(name))
+
+  const availableTools = globalResources.mcp_servers
+    .map((s) => s.name)
+    .filter((name) => !editedAgent.tools.includes(name))
 
   const handleSave = async () => {
     try {
@@ -43,13 +126,12 @@ function AgentEditor({ agent, onClose, onSave }: AgentEditorProps) {
     }
   }
 
-  const addTool = () => {
-    if (toolInput.trim() && !editedAgent.tools.includes(toolInput.trim())) {
+  const addTool = (tool: string) => {
+    if (!editedAgent.tools.includes(tool)) {
       setEditedAgent({
         ...editedAgent,
-        tools: [...editedAgent.tools, toolInput.trim()],
+        tools: [...editedAgent.tools, tool],
       })
-      setToolInput('')
     }
   }
 
@@ -60,13 +142,12 @@ function AgentEditor({ agent, onClose, onSave }: AgentEditorProps) {
     })
   }
 
-  const addSkill = () => {
-    if (skillInput.trim() && !editedAgent.skills.includes(skillInput.trim())) {
+  const addSkill = (skill: string) => {
+    if (!editedAgent.skills.includes(skill)) {
       setEditedAgent({
         ...editedAgent,
-        skills: [...editedAgent.skills, skillInput.trim()],
+        skills: [...editedAgent.skills, skill],
       })
-      setSkillInput('')
     }
   }
 
@@ -77,74 +158,56 @@ function AgentEditor({ agent, onClose, onSave }: AgentEditorProps) {
     })
   }
 
-  const handleToolsDrop = (e: React.DragEvent) => {
+  const handleDragStart = (e: React.DragEvent, type: 'skill' | 'tool', name: string, source: 'available' | 'assigned') => {
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/plain', JSON.stringify({ type, name, source }))
+  }
+
+  const handleAvailableDrop = (e: React.DragEvent) => {
     e.preventDefault()
-    setToolsDropActive(false)
+    setAvailableDropActive(false)
 
     try {
       const data = JSON.parse(e.dataTransfer.getData('text/plain'))
-      if (data.type === 'mcp' && !editedAgent.tools.includes(data.name)) {
-        setEditedAgent({
-          ...editedAgent,
-          tools: [...editedAgent.tools, data.name],
-        })
+      if (data.source === 'assigned') {
+        if (activeTab === 'skills' && data.type === 'skill') {
+          removeSkill(data.name)
+        } else if (activeTab === 'tools' && data.type === 'tool') {
+          removeTool(data.name)
+        }
       }
     } catch (err) {
       console.error('Invalid drag data:', err)
     }
   }
 
-  const handleSkillsDrop = (e: React.DragEvent) => {
+  const handleAssignedDrop = (e: React.DragEvent) => {
     e.preventDefault()
-    setSkillsDropActive(false)
+    setAssignedDropActive(false)
 
     try {
       const data = JSON.parse(e.dataTransfer.getData('text/plain'))
-      if (data.type === 'skill' && !editedAgent.skills.includes(data.name)) {
-        setEditedAgent({
-          ...editedAgent,
-          skills: [...editedAgent.skills, data.name],
-        })
+      if (data.source === 'available') {
+        if (activeTab === 'skills' && data.type === 'skill') {
+          addSkill(data.name)
+        } else if (activeTab === 'tools' && data.type === 'tool') {
+          addTool(data.name)
+        }
       }
     } catch (err) {
       console.error('Invalid drag data:', err)
     }
   }
 
-  const handleDragOver = (e: React.DragEvent, zone: 'tools' | 'skills') => {
+  const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault()
-    try {
-      const data = JSON.parse(e.dataTransfer.getData('text/plain'))
-      // Only highlight if the type matches the zone
-      if (zone === 'tools' && data.type === 'mcp') {
-        setToolsDropActive(true)
-      } else if (zone === 'skills' && data.type === 'skill') {
-        setSkillsDropActive(true)
-      }
-    } catch {
-      // Data might not be available during dragover in some browsers
-      // So we optimistically highlight
-      if (zone === 'tools') {
-        setToolsDropActive(true)
-      } else {
-        setSkillsDropActive(true)
-      }
-    }
-  }
-
-  const handleDragLeave = (zone: 'tools' | 'skills') => {
-    if (zone === 'tools') {
-      setToolsDropActive(false)
-    } else {
-      setSkillsDropActive(false)
-    }
   }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-background border border-border rounded-lg w-full max-w-3xl max-h-[90vh] flex flex-col">
+      <div className="bg-background border border-border rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h2 className="text-lg font-semibold">Edit Agent</h2>
+          <h2 className="text-lg font-semibold">Edit: {editedAgent.name || 'Untitled'}</h2>
           <button
             onClick={onClose}
             className="text-foreground-secondary hover:text-foreground transition-colors"
@@ -154,14 +217,30 @@ function AgentEditor({ agent, onClose, onSave }: AgentEditorProps) {
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium mb-1.5">Name</label>
-            <input
-              type="text"
-              value={editedAgent.name}
-              onChange={(e) => setEditedAgent({ ...editedAgent, name: e.target.value })}
-              className="w-full px-3 py-2 bg-background-elevated border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-tool/50"
-            />
+          {/* Top section: Name, Description, Model */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1.5">Name</label>
+              <input
+                type="text"
+                value={editedAgent.name}
+                onChange={(e) => setEditedAgent({ ...editedAgent, name: e.target.value })}
+                className="w-full px-3 py-2 bg-background-elevated border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-tool/50"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1.5">Model</label>
+              <select
+                value={editedAgent.model}
+                onChange={(e) => setEditedAgent({ ...editedAgent, model: e.target.value as ModelType })}
+                className="w-full px-3 py-2 bg-background-elevated border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-tool/50"
+              >
+                <option value="opus">Opus</option>
+                <option value="sonnet">Sonnet</option>
+                <option value="haiku">Haiku</option>
+              </select>
+            </div>
           </div>
 
           <div>
@@ -169,134 +248,127 @@ function AgentEditor({ agent, onClose, onSave }: AgentEditorProps) {
             <textarea
               value={editedAgent.description}
               onChange={(e) => setEditedAgent({ ...editedAgent, description: e.target.value })}
-              rows={3}
+              rows={2}
               className="w-full px-3 py-2 bg-background-elevated border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-tool/50 resize-none"
             />
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1.5">Model</label>
-            <select
-              value={editedAgent.model}
-              onChange={(e) => setEditedAgent({ ...editedAgent, model: e.target.value as ModelType })}
-              className="w-full px-3 py-2 bg-background-elevated border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-tool/50"
-            >
-              <option value="opus">Opus</option>
-              <option value="sonnet">Sonnet</option>
-              <option value="haiku">Haiku</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium mb-1.5">Tools</label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                value={toolInput}
-                onChange={(e) => setToolInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addTool()}
-                placeholder="Add tool..."
-                className="flex-1 px-3 py-2 bg-background-elevated border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-tool/50"
-              />
+          {/* Tab selector */}
+          <div className="border-t border-border pt-4">
+            <div className="flex gap-4 mb-4">
               <button
-                onClick={addTool}
-                className="px-4 py-2 bg-tool text-white rounded text-sm font-medium hover:bg-tool/90 transition-colors"
+                onClick={() => setActiveTab('skills')}
+                className={cn(
+                  'px-4 py-2 text-sm font-medium transition-colors border-b-2',
+                  activeTab === 'skills'
+                    ? 'border-skill text-skill'
+                    : 'border-transparent text-foreground-secondary hover:text-foreground'
+                )}
               >
-                Add
+                Skills
+              </button>
+              <button
+                onClick={() => setActiveTab('tools')}
+                className={cn(
+                  'px-4 py-2 text-sm font-medium transition-colors border-b-2',
+                  activeTab === 'tools'
+                    ? 'border-tool text-tool'
+                    : 'border-transparent text-foreground-secondary hover:text-foreground'
+                )}
+              >
+                Tools
               </button>
             </div>
-            <div
-              onDrop={handleToolsDrop}
-              onDragOver={(e) => handleDragOver(e, 'tools')}
-              onDragLeave={() => handleDragLeave('tools')}
-              className={cn(
-                'min-h-[60px] p-3 rounded border-2 border-dashed transition-colors',
-                toolsDropActive
-                  ? 'border-tool bg-tool/10'
-                  : 'border-border bg-background-elevated',
-                'flex flex-wrap gap-2'
+
+            {/* Two-column drag-drop */}
+            <div className="flex gap-4">
+              {activeTab === 'skills' && (
+                <>
+                  <DragDropZone
+                    items={availableSkills}
+                    type="skill"
+                    colorClass="text-skill"
+                    bgClass="bg-skill-bg"
+                    onAdd={addSkill}
+                    onRemove={removeSkill}
+                    dropActive={availableDropActive}
+                    onDragOver={(e) => {
+                      handleDragOver(e)
+                      setAvailableDropActive(true)
+                    }}
+                    onDragLeave={() => setAvailableDropActive(false)}
+                    onDrop={handleAvailableDrop}
+                    label="Available"
+                    dragStartHandler={(e, item) => handleDragStart(e, 'skill', item, 'available')}
+                  />
+                  <DragDropZone
+                    items={editedAgent.skills}
+                    type="skill"
+                    colorClass="text-skill"
+                    bgClass="bg-skill-bg"
+                    onAdd={addSkill}
+                    onRemove={removeSkill}
+                    dropActive={assignedDropActive}
+                    onDragOver={(e) => {
+                      handleDragOver(e)
+                      setAssignedDropActive(true)
+                    }}
+                    onDragLeave={() => setAssignedDropActive(false)}
+                    onDrop={handleAssignedDrop}
+                    label="Assigned"
+                    dragStartHandler={(e, item) => handleDragStart(e, 'skill', item, 'assigned')}
+                  />
+                </>
               )}
-            >
-              {editedAgent.tools.length === 0 && (
-                <span className="text-xs text-foreground-muted italic">
-                  Drag MCP servers here or use the input above
-                </span>
+
+              {activeTab === 'tools' && (
+                <>
+                  <DragDropZone
+                    items={availableTools}
+                    type="tool"
+                    colorClass="text-tool"
+                    bgClass="bg-tool-bg"
+                    onAdd={addTool}
+                    onRemove={removeTool}
+                    dropActive={availableDropActive}
+                    onDragOver={(e) => {
+                      handleDragOver(e)
+                      setAvailableDropActive(true)
+                    }}
+                    onDragLeave={() => setAvailableDropActive(false)}
+                    onDrop={handleAvailableDrop}
+                    label="Available"
+                    dragStartHandler={(e, item) => handleDragStart(e, 'tool', item, 'available')}
+                  />
+                  <DragDropZone
+                    items={editedAgent.tools}
+                    type="tool"
+                    colorClass="text-tool"
+                    bgClass="bg-tool-bg"
+                    onAdd={addTool}
+                    onRemove={removeTool}
+                    dropActive={assignedDropActive}
+                    onDragOver={(e) => {
+                      handleDragOver(e)
+                      setAssignedDropActive(true)
+                    }}
+                    onDragLeave={() => setAssignedDropActive(false)}
+                    onDrop={handleAssignedDrop}
+                    label="Assigned"
+                    dragStartHandler={(e, item) => handleDragStart(e, 'tool', item, 'assigned')}
+                  />
+                </>
               )}
-              {editedAgent.tools.map((tool) => (
-                <span
-                  key={tool}
-                  className="px-2 py-1 text-xs rounded bg-tool-bg text-tool border border-tool/20 flex items-center gap-1.5 h-fit"
-                >
-                  {tool}
-                  <button
-                    onClick={() => removeTool(tool)}
-                    className="hover:text-foreground transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
             </div>
           </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-1.5">Skills</label>
-            <div className="flex gap-2 mb-2">
-              <input
-                type="text"
-                value={skillInput}
-                onChange={(e) => setSkillInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addSkill()}
-                placeholder="Add skill..."
-                className="flex-1 px-3 py-2 bg-background-elevated border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-tool/50"
-              />
-              <button
-                onClick={addSkill}
-                className="px-4 py-2 bg-tool text-white rounded text-sm font-medium hover:bg-tool/90 transition-colors"
-              >
-                Add
-              </button>
-            </div>
-            <div
-              onDrop={handleSkillsDrop}
-              onDragOver={(e) => handleDragOver(e, 'skills')}
-              onDragLeave={() => handleDragLeave('skills')}
-              className={cn(
-                'min-h-[60px] p-3 rounded border-2 border-dashed transition-colors',
-                skillsDropActive
-                  ? 'border-skill bg-skill/10'
-                  : 'border-border bg-background-elevated',
-                'flex flex-wrap gap-2'
-              )}
-            >
-              {editedAgent.skills.length === 0 && (
-                <span className="text-xs text-foreground-muted italic">
-                  Drag skills here or use the input above
-                </span>
-              )}
-              {editedAgent.skills.map((skill) => (
-                <span
-                  key={skill}
-                  className="px-2 py-1 text-xs rounded bg-skill-bg text-skill border border-skill/20 flex items-center gap-1.5 h-fit"
-                >
-                  {skill}
-                  <button
-                    onClick={() => removeSkill(skill)}
-                    className="hover:text-foreground transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          </div>
-
-          <div>
+          {/* Body section */}
+          <div className="border-t border-border pt-4">
             <label className="block text-sm font-medium mb-1.5">Body (Markdown)</label>
             <textarea
               value={editedAgent.body}
               onChange={(e) => setEditedAgent({ ...editedAgent, body: e.target.value })}
-              rows={10}
+              rows={8}
               className="w-full px-3 py-2 bg-background-elevated border border-border rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-tool/50 resize-none"
               placeholder="Agent instructions in markdown..."
             />
@@ -314,7 +386,7 @@ function AgentEditor({ agent, onClose, onSave }: AgentEditorProps) {
             onClick={handleSave}
             className="px-4 py-2 bg-tool text-white rounded text-sm font-medium hover:bg-tool/90 transition-colors"
           >
-            Save Changes
+            Save
           </button>
         </div>
       </div>
@@ -634,6 +706,7 @@ export default function App() {
           agent={editingAgent}
           onClose={() => setEditingAgent(null)}
           onSave={handleSaveAgent}
+          globalResources={globalResources}
         />
       )}
     </div>
