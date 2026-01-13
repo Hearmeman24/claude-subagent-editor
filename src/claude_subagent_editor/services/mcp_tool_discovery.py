@@ -146,18 +146,45 @@ class MCPToolDiscovery:
         """
         try:
             async with httpx.AsyncClient(timeout=MCP_QUERY_TIMEOUT) as client:
-                # Send tools/list request
-                response = await client.post(
+                # MCP HTTP headers
+                headers = {
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                }
+
+                # First, send initialize request (MCP protocol handshake)
+                init_response = await client.post(
+                    url,
+                    json={
+                        "jsonrpc": "2.0",
+                        "method": "initialize",
+                        "params": {
+                            "protocolVersion": "2024-11-05",
+                            "capabilities": {},
+                            "clientInfo": {
+                                "name": "claude-subagent-editor",
+                                "version": "0.1.0",
+                            },
+                        },
+                        "id": 1,
+                    },
+                    headers=headers,
+                )
+                init_response.raise_for_status()
+
+                # Then send tools/list request
+                tools_response = await client.post(
                     url,
                     json={
                         "jsonrpc": "2.0",
                         "method": "tools/list",
-                        "id": 1,
+                        "id": 2,
                     },
+                    headers=headers,
                 )
-                response.raise_for_status()
+                tools_response.raise_for_status()
 
-                result = response.json()
+                result = tools_response.json()
                 tools_data = result.get("result", {}).get("tools", [])
 
                 # Convert to MCPToolInfo objects
@@ -176,6 +203,20 @@ class MCPToolDiscovery:
                     tools=tools,
                 )
 
+        except httpx.HTTPStatusError as e:
+            # Handle specific HTTP status errors
+            logger.warning("HTTP %s error querying server %s: %s", e.response.status_code, server_name, e)
+            if e.response.status_code == 406:
+                # 406 Not Acceptable may indicate SSE transport requirement
+                error_msg = "HTTP MCP servers with SSE transport not yet supported"
+            else:
+                error_msg = f"HTTP {e.response.status_code}: {str(e)}"
+            return MCPServerWithTools(
+                name=server_name,
+                connected=False,
+                error=error_msg,
+                tools=[],
+            )
         except httpx.HTTPError as e:
             logger.warning("HTTP error querying server %s: %s", server_name, e)
             return MCPServerWithTools(
