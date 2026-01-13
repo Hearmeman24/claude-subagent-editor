@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from claude_subagent_editor.api.routes import router
@@ -31,7 +32,32 @@ app.add_middleware(
 # Include API routes
 app.include_router(router)
 
-# Serve static files if they exist
+# Static file serving
 static_dir = Path(__file__).parent / "static"
-if static_dir.exists():
-    app.mount("/", StaticFiles(directory=static_dir, html=True), name="static")
+
+
+@app.get("/", response_class=HTMLResponse)
+async def serve_spa():
+    """Serve the React SPA."""
+    index_path = static_dir / "index.html"
+    if index_path.exists():
+        return FileResponse(index_path)
+    return HTMLResponse(
+        content="""
+        <html>
+        <head><title>Claude Subagent Editor</title></head>
+        <body style="background:#0a0a0a;color:#fafafa;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">
+            <div style="text-align:center">
+                <h1>Claude Subagent Editor</h1>
+                <p style="color:#71717a">Frontend not built. Run: cd frontend && npm run build</p>
+            </div>
+        </body>
+        </html>
+        """,
+        status_code=200,
+    )
+
+
+# Mount static assets if directory exists
+if static_dir.exists() and (static_dir / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=static_dir / "assets"), name="assets")
