@@ -69,13 +69,40 @@ class ProjectScanRequest(BaseModel):
     model_config = {"extra": "forbid"}
 
 
+class MCPServerInfo(BaseModel):
+    """Information about a discovered MCP server."""
+
+    name: str = Field(..., description="MCP server name")
+    command: str | None = Field(None, description="Command to run server")
+    url: str | None = Field(None, description="HTTP/HTTPS URL if server is remote")
+    connected: bool = Field(..., description="Whether server is currently connected")
+    model_config = {"extra": "forbid"}
+
+
+class SkillInfo(BaseModel):
+    """Information about a discovered skill."""
+
+    name: str = Field(..., description="Skill name")
+    path: str = Field(..., description="Path to skill file")
+    description: str | None = Field(None, description="Skill description")
+    model_config = {"extra": "forbid"}
+
+
 class ProjectScanResponse(BaseModel):
     """Response from scanning a project."""
 
     path: str = Field(..., description="Scanned project path")
     agents: list[AgentConfig] = Field(default_factory=list, description="List of discovered agents")
-    mcp_servers: list[str] = Field(default_factory=list, description="List of MCP server names")
+    mcp_servers: list[str] = Field(
+        default_factory=list, description="List of MCP server names from .mcp.json files"
+    )
     agent_count: int = Field(..., description="Number of agents found")
+    skills: list[SkillInfo] = Field(
+        default_factory=list, description="Globally available skills from ~/.claude/plugins"
+    )
+    connected_mcp_servers: list[MCPServerInfo] = Field(
+        default_factory=list, description="Connected MCP servers from 'claude mcp list'"
+    )
     model_config = {"extra": "forbid"}
 
 
@@ -91,4 +118,14 @@ class AgentResponse(BaseModel):
     """Response for single agent."""
 
     agent: AgentConfig = Field(..., description="Agent configuration")
+    model_config = {"extra": "forbid"}
+
+
+class GlobalResourcesResponse(BaseModel):
+    """Response containing globally available resources."""
+
+    skills: list[SkillInfo] = Field(default_factory=list, description="Discovered skills")
+    mcp_servers: list[MCPServerInfo] = Field(
+        default_factory=list, description="Discovered MCP servers"
+    )
     model_config = {"extra": "forbid"}

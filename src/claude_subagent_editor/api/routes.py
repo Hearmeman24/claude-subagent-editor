@@ -11,17 +11,22 @@ from claude_subagent_editor.models.schemas import (
     AgentConfig,
     AgentListResponse,
     AgentResponse,
+    GlobalResourcesResponse,
     HealthResponse,
+    MCPServerInfo,
     ProjectScanRequest,
     ProjectScanResponse,
+    SkillInfo,
 )
 from claude_subagent_editor.services.agent_parser import AgentParser
+from claude_subagent_editor.services.discovery import ResourceDiscovery
 
 router = APIRouter()
 
 # Global state
 _current_project: Path | None = None
 _parser = AgentParser()
+_discovery = ResourceDiscovery()
 
 # Logger
 logger = logging.getLogger(__name__)
@@ -173,14 +178,35 @@ async def scan_project(request: ProjectScanRequest) -> ProjectScanResponse:
             except ValueError as e:
                 logger.warning(f"Skipping invalid agent file {agent_file}: {e}")
 
-    # Discover MCP servers
+    # Discover MCP servers from .mcp.json files
     mcp_servers = _discover_mcp_servers(project_path)
+
+    # Discover global skills
+    discovered_skills = _discovery.discover_skills()
+    skills = [
+        SkillInfo(name=s.name, path=s.path, description=s.description)
+        for s in discovered_skills
+    ]
+
+    # Discover connected MCP servers via claude mcp list
+    discovered_servers = _discovery.discover_mcp_servers()
+    connected_mcp_servers = [
+        MCPServerInfo(
+            name=s.name,
+            command=s.command,
+            url=s.url,
+            connected=s.connected,
+        )
+        for s in discovered_servers
+    ]
 
     return ProjectScanResponse(
         path=str(project_path),
         agents=agents,
         mcp_servers=mcp_servers,
         agent_count=len(agents),
+        skills=skills,
+        connected_mcp_servers=connected_mcp_servers,
     )
 
 
@@ -266,3 +292,36 @@ async def get_agent(filename: str) -> AgentResponse:
             status_code=500,
             detail=f"Failed to parse agent: {str(e)}",
         )
+
+
+@router.get("/api/resources/global", response_model=GlobalResourcesResponse)
+async def get_global_resources() -> GlobalResourcesResponse:
+    """Get globally available resources (skills and MCP servers).
+
+    This endpoint discovers:
+    - Skills from ~/.claude/plugins recursively
+    - MCP servers via 'claude mcp list' command
+
+    Returns:
+        GlobalResourcesResponse: Discovered global resources.
+    """
+    # Discover skills
+    discovered_skills = _discovery.discover_skills()
+    skills = [
+        SkillInfo(name=s.name, path=s.path, description=s.description)
+        for s in discovered_skills
+    ]
+
+    # Discover MCP servers
+    discovered_servers = _discovery.discover_mcp_servers()
+    mcp_servers = [
+        MCPServerInfo(
+            name=s.name,
+            command=s.command,
+            url=s.url,
+            connected=s.connected,
+        )
+        for s in discovered_servers
+    ]
+
+    return GlobalResourcesResponse(skills=skills, mcp_servers=mcp_servers)
