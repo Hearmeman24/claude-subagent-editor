@@ -1,7 +1,7 @@
 # Claude Code orchestration
 .beads/
 .claude/
-
+.history/
 # Node
 node_modules/
 dist/

@@ -17,7 +17,8 @@ A web-based GUI for editing Claude Code subagent configuration files. Manage you
 
 ## The Problem
 
-Claude Code subagents are configured through markdown files with YAML frontmatter, located in `.claude/agents/`. Managing tools, skills, and MCP servers for each agent means manually editing these files—keeping track of available options, avoiding typos, and remembering the exact syntax for MCP tool names like `mcp__playwright__browser_navigate`.
+Claude Code subagents are configured through markdown files with YAML frontmatter, located in `.claude/agents/`.
+Managing tools, skills, and MCP servers for each agent means manually editing these files—keeping track of available options, avoiding typos, and remembering the exact syntax for MCP tool names like `mcp__playwright__browser_navigate`.
 
 ## The Solution
 
