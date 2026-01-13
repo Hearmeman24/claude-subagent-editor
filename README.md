@@ -2,6 +2,8 @@
 
 A web-based GUI for editing Claude Code subagent configuration files. Manage your AI agents visually with drag-and-drop simplicity.
 
+**Tested on macOS Tahoe and macOS Sequoia. No Windows support for now.**
+
 ## Screenshots
 
 ### Project Picker
@@ -13,36 +15,17 @@ A web-based GUI for editing Claude Code subagent configuration files. Manage you
 ### Edit Modal with Drag-and-Drop
 ![Edit Modal](screenshots/edit-modal.png)
 
-## Features
+## The Problem
 
-### Core Features
-- **Project Scanner** - Automatically discovers `.claude/agents/*.md` files
-- **Visual YAML Editor** - Edit agent frontmatter through an intuitive interface
-- **Multi-Project Support** - Manage agents across multiple projects with localStorage persistence
+Claude Code subagents are configured through markdown files with YAML frontmatter, located in `.claude/agents/`. Managing tools, skills, and MCP servers for each agent means manually editing these files—keeping track of available options, avoiding typos, and remembering the exact syntax for MCP tool names like `mcp__playwright__browser_navigate`.
 
-### Four-Tab Editor
-- **Tools** - Base Claude Code tools (Read, Write, Edit, Bash, Glob, Grep, etc.)
-- **Skills** - Discovered from `~/.claude/plugins`
-- **MCP** - Servers discovered with individual tool selection
-- **Disallowed** - Tools to exclude from the agent
+## The Solution
 
-### Drag-and-Drop Interface
-- Drag tools, skills, and MCP actions between Available and Assigned columns
-- "Add All" button to quickly add all tools from an MCP server
-- Manual MCP action entry for servers that fail to connect
-- Mutual exclusion enforced between allowed and disallowed tools
+Claude Subagent Editor provides a visual interface that scans your projects, discovers available resources, and lets you configure agents through drag-and-drop. It automatically discovers base Claude tools, skills from `~/.claude/plugins`, and MCP servers from your configuration.
 
-### Smart Features
-- **All Tools Mode** - Enable all tools with a single checkbox (`tools: *`)
-- **MCP Server Grouping** - Agent tiles show "server (N)" instead of individual actions
-- **Overflow Handling** - Shows "+N more" when categories exceed 10 items
-- **Connection Status** - Visual indicators for MCP server connectivity
-- **Warning Tooltips** - Alerts when skills are assigned without the Skill tool
+The editor uses a four-tab system for organizing resources: **Tools** (base Claude capabilities like Read, Write, Bash), **Skills** (your custom skills), **MCP** (with individual action selection per server), and **Disallowed** (tools to explicitly exclude). Drag items between Available and Assigned columns, or use "Add All" to quickly assign entire MCP servers.
 
-### MCP Discovery
-- Queries MCP servers via stdio and HTTP transports
-- Reads authentication headers from `~/.claude.json`
-- Fallback to manual entry when servers fail to connect
+Smart features include an "All Tools" mode that grants access to everything, automatic grouping of MCP tools by server in the overview, overflow handling for agents with many tools, and warnings when skills are assigned without the required Skill tool.
 
 ## Installation
 
@@ -52,26 +35,12 @@ cd claude-subagent-editor
 uv run claude-subagent-editor
 ```
 
-Or install from GitHub directly:
-```bash
-uvx --from git+https://github.com/Hearmeman24/claude-subagent-editor claude-subagent-editor
-```
-
-## Usage
-
-1. Open [http://127.0.0.1:8765](http://127.0.0.1:8765)
-2. Add a project path
-3. Click a project to view its agents
-4. Click **Edit** on any agent
-5. Use the four tabs to configure tools, skills, MCP, and disallowed tools
-6. Drag items between Available and Assigned columns
-7. Click **Save** to persist changes
+Then open [http://127.0.0.1:8765](http://127.0.0.1:8765) in your browser.
 
 ## Tech Stack
 
-- **Backend:** FastAPI + Python 3.10+
-- **Frontend:** React + TypeScript + Vite + Tailwind CSS
-- **Distribution:** uvx (uv-compatible)
+- **Backend:** FastAPI (Python 3.10+)
+- **Frontend:** React + TypeScript + Tailwind CSS
 
 ## Agent File Format
 
