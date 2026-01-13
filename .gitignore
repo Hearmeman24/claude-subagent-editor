@@ -38,3 +38,6 @@ wheels/
 .DS_Store
 Thumbs.db
 .mcp.json
+
+# Sensitive docs
+PRODUCT_SPEC.md
