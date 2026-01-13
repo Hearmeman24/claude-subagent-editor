@@ -3,6 +3,17 @@
 
 set -e
 
+# Validate prerequisites
+if [ ! -d "frontend" ]; then
+  echo "Error: frontend directory not found. Run from project root."
+  exit 1
+fi
+
+if ! command -v npm &> /dev/null; then
+  echo "Error: npm not installed. Please install Node.js and npm."
+  exit 1
+fi
+
 echo "Building React frontend..."
 cd frontend
 npm install
