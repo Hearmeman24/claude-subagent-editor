@@ -64,8 +64,13 @@ async def test_discover_all_tools_missing_file(tool_discovery, tmp_path):
 @pytest.mark.asyncio
 async def test_query_http_server_success(tool_discovery):
     """Test querying HTTP MCP server successfully."""
-    mock_response = MagicMock()
-    mock_response.json.return_value = {
+    # Mock initialize response
+    mock_init_response = MagicMock()
+    mock_init_response.json.return_value = {"result": {"protocolVersion": "2024-11-05"}}
+
+    # Mock tools/list response
+    mock_tools_response = MagicMock()
+    mock_tools_response.json.return_value = {
         "result": {
             "tools": [
                 {"name": "tool1", "description": "Test tool 1"},
@@ -76,7 +81,7 @@ async def test_query_http_server_success(tool_discovery):
 
     with patch("httpx.AsyncClient") as mock_client:
         mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-            return_value=mock_response
+            side_effect=[mock_init_response, mock_tools_response]
         )
 
         result = await tool_discovery._query_http_server("test", "http://localhost:8080")
@@ -105,6 +110,31 @@ async def test_query_http_server_error(tool_discovery):
         assert result.name == "test"
         assert result.connected is False
         assert "Connection error" in result.error
+        assert result.tools == []
+
+
+@pytest.mark.asyncio
+async def test_query_http_server_406_not_acceptable(tool_discovery):
+    """Test querying HTTP MCP server with 406 Not Acceptable (SSE transport)."""
+    import httpx
+
+    with patch("httpx.AsyncClient") as mock_client:
+        # Create a mock HTTPStatusError for 406
+        mock_response = MagicMock()
+        mock_response.status_code = 406
+        mock_error = httpx.HTTPStatusError(
+            "406 Not Acceptable", request=MagicMock(), response=mock_response
+        )
+
+        mock_client.return_value.__aenter__.return_value.post = AsyncMock(
+            side_effect=mock_error
+        )
+
+        result = await tool_discovery._query_http_server("test", "http://localhost:8080")
+
+        assert result.name == "test"
+        assert result.connected is False
+        assert "SSE transport not yet supported" in result.error
         assert result.tools == []
 
 
@@ -206,8 +236,13 @@ def test_query_stdio_sync_valid_response(tool_discovery):
 @pytest.mark.asyncio
 async def test_tool_naming_convention(tool_discovery):
     """Test that tool names follow the mcp__server__tool convention."""
-    mock_response = MagicMock()
-    mock_response.json.return_value = {
+    # Mock initialize response
+    mock_init_response = MagicMock()
+    mock_init_response.json.return_value = {"result": {"protocolVersion": "2024-11-05"}}
+
+    # Mock tools/list response
+    mock_tools_response = MagicMock()
+    mock_tools_response.json.return_value = {
         "result": {
             "tools": [
                 {"name": "browser_click"},
@@ -218,7 +253,7 @@ async def test_tool_naming_convention(tool_discovery):
 
     with patch("httpx.AsyncClient") as mock_client:
         mock_client.return_value.__aenter__.return_value.post = AsyncMock(
-            return_value=mock_response
+            side_effect=[mock_init_response, mock_tools_response]
         )
 
         result = await tool_discovery._query_http_server(
