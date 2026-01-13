@@ -365,3 +365,91 @@ async def test_tool_naming_convention(tool_discovery):
 
         assert result.tools[0].full_name == "mcp__playwright__browser_click"
         assert result.tools[1].full_name == "mcp__playwright__browser_navigate"
+
+
+@pytest.mark.asyncio
+async def test_query_http_server_with_custom_headers(tool_discovery):
+    """Test that custom headers from config are passed to HTTP requests."""
+    # Mock initialize response
+    mock_init_response = MagicMock()
+    mock_init_response.json.return_value = {"result": {"protocolVersion": "2024-11-05"}}
+
+    # Mock tools/list response
+    mock_tools_response = MagicMock()
+    mock_tools_response.json.return_value = {
+        "result": {
+            "tools": [
+                {"name": "tool1", "description": "Test tool 1"},
+            ]
+        }
+    }
+
+    with patch("httpx.AsyncClient") as mock_client:
+        mock_post = AsyncMock(side_effect=[mock_init_response, mock_tools_response])
+        mock_client.return_value.__aenter__.return_value.post = mock_post
+
+        custom_headers = {"CONTEXT7_API_KEY": "test-key-123"}
+        result = await tool_discovery._query_http_server(
+            "test", "http://localhost:8080", custom_headers
+        )
+
+        assert result.connected is True
+        assert len(result.tools) == 1
+
+        # Verify headers were included in both requests
+        assert mock_post.call_count == 2
+        for call in mock_post.call_args_list:
+            headers = call.kwargs.get("headers", {})
+            assert "CONTEXT7_API_KEY" in headers
+            assert headers["CONTEXT7_API_KEY"] == "test-key-123"
+            assert headers["Content-Type"] == "application/json"
+            assert headers["Accept"] == "application/json"
+
+
+@pytest.mark.asyncio
+async def test_load_configs_merges_global_and_project(tool_discovery, tmp_path):
+    """Test that configs from global and project are merged correctly."""
+    # Create fake global config
+    fake_home = tmp_path / "fake_home"
+    fake_home.mkdir()
+    global_config_path = fake_home / ".claude.json"
+    global_config_path.write_text(
+        json.dumps({
+            "mcpServers": {
+                "global-server": {
+                    "url": "http://global.example.com",
+                    "headers": {"API_KEY": "global-key"}
+                }
+            }
+        })
+    )
+
+    # Create project config
+    project_config_path = tmp_path / ".mcp.json"
+    project_config_path.write_text(
+        json.dumps({
+            "mcpServers": {
+                "project-server": {
+                    "url": "http://project.example.com",
+                    "headers": {"API_KEY": "project-key"}
+                },
+                "global-server": {
+                    "url": "http://override.example.com",
+                    "headers": {"API_KEY": "override-key"}
+                }
+            }
+        })
+    )
+
+    with patch("pathlib.Path.home") as mock_home:
+        mock_home.return_value = fake_home
+        configs = tool_discovery._load_mcp_configs(project_config_path)
+
+    # Should have both servers, with project overriding global for "global-server"
+    assert len(configs) == 2
+    assert "global-server" in configs
+    assert "project-server" in configs
+    assert configs["global-server"]["url"] == "http://override.example.com"
+    assert configs["global-server"]["headers"]["API_KEY"] == "override-key"
+    assert configs["project-server"]["url"] == "http://project.example.com"
+    assert configs["project-server"]["headers"]["API_KEY"] == "project-key"
