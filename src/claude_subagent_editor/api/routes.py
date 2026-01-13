@@ -1,6 +1,7 @@
 """API routes for Claude Subagent Editor."""
 
 import json
+import logging
 from pathlib import Path
 
 from fastapi import APIRouter, HTTPException
@@ -21,6 +22,9 @@ router = APIRouter()
 # Global state
 _current_project: Path | None = None
 _parser = AgentParser()
+
+# Logger
+logger = logging.getLogger(__name__)
 
 
 def _get_project_path() -> Path:
@@ -166,9 +170,8 @@ async def scan_project(request: ProjectScanRequest) -> ProjectScanResponse:
             try:
                 agent_config = _parse_agent_file(agent_file)
                 agents.append(agent_config)
-            except Exception:
-                # Skip files that can't be parsed
-                pass
+            except ValueError as e:
+                logger.warning(f"Skipping invalid agent file {agent_file}: {e}")
 
     # Discover MCP servers
     mcp_servers = _discover_mcp_servers(project_path)
@@ -202,9 +205,8 @@ async def list_agents() -> AgentListResponse:
             try:
                 agent_config = _parse_agent_file(agent_file)
                 agents.append(agent_config)
-            except Exception:
-                # Skip files that can't be parsed
-                pass
+            except ValueError as e:
+                logger.warning(f"Skipping invalid agent file {agent_file}: {e}")
 
     return AgentListResponse(agents=agents, count=len(agents))
 
