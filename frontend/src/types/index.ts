@@ -6,7 +6,7 @@ export interface AgentConfig {
   description: string
   model: ModelType
   tools: string[] | '*'
-  disallowed_tools: string[]
+  disallowedTools: string[]
   skills: string[]
   nickname: string | null
   body: string

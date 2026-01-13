@@ -135,7 +135,10 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
     .filter((name) => !editedAgent.skills.includes(name))
 
   const availableBaseTools = DEFAULT_CLAUDE_TOOLS
-    .filter((name) => !agentBaseTools.includes(name))
+    .filter((name) =>
+      !agentBaseTools.includes(name) &&
+      !editedAgent.disallowedTools.includes(name)
+    )
 
   const handleSave = async () => {
     try {
@@ -563,7 +566,9 @@ function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: Agen
                           )}
                           {mcpTools.map((server) => {
                             const availableTools = server.tools.filter(
-                              tool => !agentMcpTools.includes(tool.full_name)
+                              tool =>
+                                !agentMcpTools.includes(tool.full_name) &&
+                                !editedAgent.disallowedTools.includes(tool.full_name)
                             )
                             if (availableTools.length === 0 && server.connected) return null
 
