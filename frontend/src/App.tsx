@@ -19,12 +19,13 @@ const BASE_TOOLS: BaseTool[] = [
   { name: 'AskUserQuestion', category: 'utility' },
 ]
 
+const modelColors = {
+  opus: 'text-opus',
+  sonnet: 'text-sonnet',
+  haiku: 'text-haiku',
+}
+
 function AgentCard({ agent }: { agent: AgentConfig }) {
-  const modelColors = {
-    opus: 'text-opus',
-    sonnet: 'text-sonnet',
-    haiku: 'text-haiku',
-  }
 
   return (
     <div className="border border-border rounded-lg p-4 bg-background-elevated hover:bg-background-hover transition-colors">
@@ -77,13 +78,22 @@ function AgentCard({ agent }: { agent: AgentConfig }) {
       )}
 
       <div className="flex gap-2 mt-4 pt-3 border-t border-border-subtle">
-        <button className="text-xs text-foreground-secondary hover:text-foreground transition-colors">
+        <button
+          onClick={() => console.log('Edit agent:', agent.name)}
+          className="text-xs text-foreground-secondary hover:text-foreground transition-colors"
+        >
           Edit
         </button>
-        <button className="text-xs text-foreground-secondary hover:text-foreground transition-colors">
+        <button
+          onClick={() => console.log('Delete agent:', agent.name)}
+          className="text-xs text-foreground-secondary hover:text-foreground transition-colors"
+        >
           Delete
         </button>
-        <button className="text-xs text-foreground-secondary hover:text-foreground transition-colors">
+        <button
+          onClick={() => console.log('Duplicate agent:', agent.name)}
+          className="text-xs text-foreground-secondary hover:text-foreground transition-colors"
+        >
           Duplicate
         </button>
       </div>
@@ -277,7 +287,10 @@ export default function App() {
                       found
                     </p>
                   </div>
-                  <button className="flex items-center gap-2 px-4 py-2 bg-tool text-white rounded font-medium hover:bg-tool/90 transition-colors">
+                  <button
+                    onClick={() => console.log('Create new agent')}
+                    className="flex items-center gap-2 px-4 py-2 bg-tool text-white rounded font-medium hover:bg-tool/90 transition-colors"
+                  >
                     <Plus className="w-4 h-4" />
                     New Agent
                   </button>
@@ -298,6 +311,15 @@ export default function App() {
               </div>
             </main>
           </>
+        )}
+
+        {loading && (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-tool mx-auto mb-4"></div>
+              <p className="text-foreground-secondary">Scanning project...</p>
+            </div>
+          </div>
         )}
 
         {!projectData && !loading && (
