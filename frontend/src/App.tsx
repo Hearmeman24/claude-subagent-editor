@@ -122,6 +122,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
   const [assignedDropActive, setAssignedDropActive] = useState(false)
   const [mcpServers, setMcpServers] = useState<MCPServerWithTools[]>([])
   const [expandedServers, setExpandedServers] = useState<Record<string, boolean>>({})
+  const [manualMcpInput, setManualMcpInput] = useState('')
 
   // Fetch MCP tools on mount
   useEffect(() => {
@@ -601,9 +602,15 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
                             {expandedServers[server.name] && (
                               <div className="pl-4 space-y-1">
                                 {!server.connected && (
-                                  <div className="text-xs text-foreground-muted italic">
-                                    {server.error || 'No tools available'}
-                                  </div>
+                                  <>
+                                    <div className="text-xs text-foreground-muted italic">
+                                      {server.error || 'No tools available'}
+                                    </div>
+                                    <div className="text-amber-500 text-xs mt-1">
+                                      ⚠️ Couldn't retrieve actions for {server.name}.
+                                      Consider adding manually by running <code className="bg-zinc-800 px-1 py-0.5 rounded">/mcp</code> in Claude Code.
+                                    </div>
+                                  </>
                                 )}
                                 {availableTools.map((tool) => (
                                   <span
@@ -669,6 +676,35 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
                     </div>
                   </div>
                 </>
+              )}
+
+              {activeTab === 'mcp' && (
+                <div className="mt-4 border-t border-zinc-700 pt-4">
+                  <h4 className="text-sm font-medium mb-2">Add MCP Action Manually</h4>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="mcp__servername__action"
+                      value={manualMcpInput}
+                      onChange={(e) => setManualMcpInput(e.target.value)}
+                      className="flex-1 px-2 py-1 bg-zinc-800 border border-zinc-700 rounded text-sm"
+                    />
+                    <button
+                      onClick={() => {
+                        if (manualMcpInput.trim()) {
+                          addMcpTool(manualMcpInput.trim())
+                          setManualMcpInput('')
+                        }
+                      }}
+                      className="px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded text-sm"
+                    >
+                      Add
+                    </button>
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-1">
+                    Format: mcp__servername__actionname (e.g., mcp__context7__query-docs)
+                  </p>
+                </div>
               )}
 
               {activeTab === 'disallowed' && (
