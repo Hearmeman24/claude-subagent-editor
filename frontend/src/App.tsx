@@ -128,8 +128,9 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
   }, [])
 
   // Separate base tools from MCP tools in agent's tools array
-  const agentBaseTools = editedAgent.tools.filter(t => !t.startsWith('mcp__'))
-  const agentMcpTools = editedAgent.tools.filter(t => t.startsWith('mcp__'))
+  const allToolsEnabled = editedAgent.tools === '*'
+  const agentBaseTools = allToolsEnabled ? [] : (editedAgent.tools as string[]).filter(t => !t.startsWith('mcp__'))
+  const agentMcpTools = allToolsEnabled ? [] : (editedAgent.tools as string[]).filter(t => t.startsWith('mcp__'))
 
   // Filter available items to exclude already assigned ones
   const availableSkills = globalResources.skills
@@ -147,6 +148,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
         description: editedAgent.description,
         model: editedAgent.model,
         tools: editedAgent.tools,
+        disallowed_tools: editedAgent.disallowed_tools,
         skills: editedAgent.skills,
         body: editedAgent.body,
       };
@@ -170,34 +172,57 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
   }
 
   const addBaseTool = (tool: string) => {
-    if (!editedAgent.tools.includes(tool)) {
+    if (allToolsEnabled) return
+    const toolsArray = editedAgent.tools as string[]
+    if (!toolsArray.includes(tool)) {
       setEditedAgent({
         ...editedAgent,
-        tools: [...editedAgent.tools, tool],
+        tools: [...toolsArray, tool],
       })
     }
   }
 
   const removeBaseTool = (tool: string) => {
+    if (allToolsEnabled) return
     setEditedAgent({
       ...editedAgent,
-      tools: editedAgent.tools.filter((t) => t !== tool),
+      tools: (editedAgent.tools as string[]).filter((t) => t !== tool),
     })
   }
 
   const addMcpTool = (fullName: string) => {
-    if (!editedAgent.tools.includes(fullName)) {
+    if (allToolsEnabled) return
+    const toolsArray = editedAgent.tools as string[]
+    if (!toolsArray.includes(fullName)) {
       setEditedAgent({
         ...editedAgent,
-        tools: [...editedAgent.tools, fullName],
+        tools: [...toolsArray, fullName],
       })
     }
   }
 
   const removeMcpTool = (fullName: string) => {
+    if (allToolsEnabled) return
     setEditedAgent({
       ...editedAgent,
-      tools: editedAgent.tools.filter((t) => t !== fullName),
+      tools: (editedAgent.tools as string[]).filter((t) => t !== fullName),
+    })
+  }
+
+  const addDisallowedTool = () => {
+    const toolName = prompt('Enter tool name to disallow:')
+    if (toolName && !editedAgent.disallowed_tools.includes(toolName)) {
+      setEditedAgent({
+        ...editedAgent,
+        disallowed_tools: [...editedAgent.disallowed_tools, toolName],
+      })
+    }
+  }
+
+  const removeDisallowedTool = (tool: string) => {
+    setEditedAgent({
+      ...editedAgent,
+      disallowed_tools: editedAgent.disallowed_tools.filter((t) => t !== tool),
     })
   }
 
@@ -361,44 +386,78 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
               </button>
             </div>
 
+            {/* ALL TOOLS toggle (shown only on Tools tab) */}
+            {activeTab === 'tools' && (
+              <div className="flex items-center gap-2 mb-4 p-3 bg-background-elevated rounded border border-border">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={allToolsEnabled}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setEditedAgent({...editedAgent, tools: '*'})
+                      } else {
+                        setEditedAgent({...editedAgent, tools: []})
+                      }
+                    }}
+                    className="w-4 h-4"
+                  />
+                  <span className="text-sm font-medium">ALL TOOLS</span>
+                  <span className="text-xs text-foreground-muted">(sets tools: *)</span>
+                </label>
+              </div>
+            )}
+
             {/* Two-column drag-drop */}
             <div className="flex gap-4">
               {activeTab === 'tools' && (
                 <>
-                  <DragDropZone
-                    items={availableBaseTools}
-                    type="tool"
-                    colorClass="text-tool"
-                    bgClass="bg-tool-bg"
-                    onAdd={addBaseTool}
-                    onRemove={removeBaseTool}
-                    dropActive={availableDropActive}
-                    onDragOver={(e) => {
-                      handleDragOver(e)
-                      setAvailableDropActive(true)
-                    }}
-                    onDragLeave={() => setAvailableDropActive(false)}
-                    onDrop={handleAvailableDrop}
-                    label="Available"
-                    dragStartHandler={(e, item) => handleDragStart(e, 'tool', item, 'available')}
-                  />
-                  <DragDropZone
-                    items={agentBaseTools}
-                    type="tool"
-                    colorClass="text-tool"
-                    bgClass="bg-tool-bg"
-                    onAdd={addBaseTool}
-                    onRemove={removeBaseTool}
-                    dropActive={assignedDropActive}
-                    onDragOver={(e) => {
-                      handleDragOver(e)
-                      setAssignedDropActive(true)
-                    }}
-                    onDragLeave={() => setAssignedDropActive(false)}
-                    onDrop={handleAssignedDrop}
-                    label="Assigned"
-                    dragStartHandler={(e, item) => handleDragStart(e, 'tool', item, 'assigned')}
-                  />
+                  {allToolsEnabled ? (
+                    <div className="flex-1 flex items-center justify-center p-8 rounded border-2 border-dashed border-border bg-background-elevated">
+                      <p className="text-sm text-foreground-secondary text-center">
+                        Agent has access to all tools.
+                        <br />
+                        Uncheck "ALL TOOLS" to customize tool selection.
+                      </p>
+                    </div>
+                  ) : (
+                    <>
+                      <DragDropZone
+                        items={availableBaseTools}
+                        type="tool"
+                        colorClass="text-tool"
+                        bgClass="bg-tool-bg"
+                        onAdd={addBaseTool}
+                        onRemove={removeBaseTool}
+                        dropActive={availableDropActive}
+                        onDragOver={(e) => {
+                          handleDragOver(e)
+                          setAvailableDropActive(true)
+                        }}
+                        onDragLeave={() => setAvailableDropActive(false)}
+                        onDrop={handleAvailableDrop}
+                        label="Available"
+                        dragStartHandler={(e, item) => handleDragStart(e, 'tool', item, 'available')}
+                      />
+                      <DragDropZone
+                        items={agentBaseTools}
+                        type="tool"
+                        colorClass="text-tool"
+                        bgClass="bg-tool-bg"
+                        onAdd={addBaseTool}
+                        onRemove={removeBaseTool}
+                        dropActive={assignedDropActive}
+                        onDragOver={(e) => {
+                          handleDragOver(e)
+                          setAssignedDropActive(true)
+                        }}
+                        onDragLeave={() => setAssignedDropActive(false)}
+                        onDrop={handleAssignedDrop}
+                        label="Assigned"
+                        dragStartHandler={(e, item) => handleDragStart(e, 'tool', item, 'assigned')}
+                      />
+                    </>
+                  )}
                 </>
               )}
 
@@ -568,6 +627,24 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
                 </>
               )}
             </div>
+
+            {/* Disallowed Tools section */}
+            <div className="mt-4 border-t border-border pt-4">
+              <h4 className="text-sm font-medium text-red-400 mb-2">Disallowed Tools</h4>
+              <div className="flex flex-wrap gap-2">
+                {editedAgent.disallowed_tools.map(tool => (
+                  <span key={tool} className="px-2 py-1 bg-red-900/30 text-red-400 border border-red-700 rounded text-sm flex items-center gap-1.5">
+                    {tool}
+                    <button onClick={() => removeDisallowedTool(tool)} className="hover:text-red-300 transition-colors">
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+                <button onClick={addDisallowedTool} className="px-2 py-1 text-red-400 text-sm hover:bg-red-900/20 rounded transition-colors border border-red-700/50">
+                  + Add
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Body section */}
@@ -622,18 +699,24 @@ function AgentCard({ agent, onEdit }: { agent: AgentConfig; onEdit: (agent: Agen
         {agent.description}
       </p>
 
-      {agent.tools.length > 0 && (
+      {(agent.tools === '*' || agent.tools.length > 0) && (
         <div className="mb-3">
           <div className="text-xs text-foreground-muted mb-1.5">Tools:</div>
           <div className="flex flex-wrap gap-1.5">
-            {agent.tools.map((tool) => (
-              <span
-                key={tool}
-                className="px-2 py-1 text-xs rounded bg-tool-bg text-tool border border-tool/20"
-              >
-                {tool}
+            {agent.tools === '*' ? (
+              <span className="px-2 py-1 text-xs rounded bg-tool-bg text-tool border border-tool/20 font-medium">
+                * (ALL TOOLS)
               </span>
-            ))}
+            ) : (
+              (agent.tools as string[]).map((tool) => (
+                <span
+                  key={tool}
+                  className="px-2 py-1 text-xs rounded bg-tool-bg text-tool border border-tool/20"
+                >
+                  {tool}
+                </span>
+              ))
+            )}
           </div>
         </div>
       )}

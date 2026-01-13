@@ -15,8 +15,9 @@ class ParsedAgent:
     name: str
     description: str
     model: str
-    tools: list[str] = field(default_factory=list)
+    tools: list[str] | str = field(default_factory=list)  # Can be "*" for all tools
     skills: list[str] = field(default_factory=list)
+    disallowed_tools: list[str] = field(default_factory=list)
     nickname: str | None = None
     body: str = ""
     raw_frontmatter: dict[str, Any] = field(default_factory=dict)
@@ -30,6 +31,7 @@ class ParsedAgent:
             "model": self.model,
             "tools": self.tools,
             "skills": self.skills,
+            "disallowed_tools": self.disallowed_tools,
             "nickname": self.nickname,
             "body": self.body,
         }
@@ -55,13 +57,24 @@ class AgentParser:
         frontmatter, body = self._split_frontmatter(content)
         data = self._parse_yaml(frontmatter)
 
+        # Handle tools - can be list, string, or "*"
+        tools_raw = data.get("tools", [])
+        if tools_raw == "*":
+            tools = "*"
+        else:
+            tools = self._normalize_list(tools_raw)
+
+        # Parse disallowedTools
+        disallowed_tools = self._normalize_list(data.get("disallowedTools", []))
+
         return ParsedAgent(
             filename=filename,
             name=self._get_required(data, "name"),
             description=self._get_required(data, "description"),
             model=data.get("model", "sonnet"),
-            tools=self._normalize_list(data.get("tools", [])),
+            tools=tools,
             skills=self._normalize_list(data.get("skills", [])),
+            disallowed_tools=disallowed_tools,
             nickname=data.get("nickname"),
             body=body.strip(),
             raw_frontmatter=dict(data),
@@ -127,10 +140,19 @@ class AgentParser:
             "model": agent.model,
         }
 
-        if agent.tools:
+        # Handle tools serialization
+        if agent.tools == "*":
+            frontmatter["tools"] = "*"
+        elif agent.tools:
             frontmatter["tools"] = agent.tools
+
         if agent.skills:
             frontmatter["skills"] = agent.skills
+
+        # Add disallowedTools if not empty
+        if agent.disallowed_tools:
+            frontmatter["disallowedTools"] = agent.disallowed_tools
+
         if agent.nickname:
             frontmatter["nickname"] = agent.nickname
 

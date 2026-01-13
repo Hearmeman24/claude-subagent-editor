@@ -87,6 +87,7 @@ def _parse_agent_file(file_path: Path) -> AgentConfig:
         model=parsed.model,
         tools=parsed.tools,
         skills=parsed.skills,
+        disallowed_tools=parsed.disallowed_tools,
         nickname=parsed.nickname,
         body=parsed.body,
     )
@@ -357,6 +358,7 @@ async def update_agent(filename: str, request: AgentUpdateRequest) -> AgentRespo
         model=request.model.value,
         tools=request.tools,
         skills=request.skills,
+        disallowed_tools=request.disallowed_tools,
         body=request.body,
     )
 
