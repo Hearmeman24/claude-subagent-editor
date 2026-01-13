@@ -51,6 +51,21 @@ function DragDropZone({
   label,
   dragStartHandler,
 }: DragDropZoneProps) {
+  // Determine border color based on type
+  const getBorderClass = () => {
+    if (colorClass.includes('red')) {
+      return dropActive ? 'border-red-500 bg-red-500/10' : 'border-border bg-background-elevated'
+    }
+    return dropActive ? `border-${type} bg-${type}/10` : 'border-border bg-background-elevated'
+  }
+
+  const getItemBorderClass = () => {
+    if (colorClass.includes('red')) {
+      return 'border-red-700'
+    }
+    return `border-${type}/20`
+  }
+
   return (
     <div className="flex-1">
       <div className="text-xs font-medium text-foreground-secondary mb-2">{label}</div>
@@ -60,7 +75,7 @@ function DragDropZone({
         onDragLeave={onDragLeave}
         className={cn(
           'min-h-[200px] max-h-[200px] overflow-y-auto p-3 rounded border-2 border-dashed transition-colors',
-          dropActive ? `border-${type} bg-${type}/10` : 'border-border bg-background-elevated',
+          getBorderClass(),
           'flex flex-wrap gap-2 content-start'
         )}
       >
@@ -78,7 +93,7 @@ function DragDropZone({
               'px-2 py-1 text-xs rounded border flex items-center gap-1.5 h-fit cursor-grab active:cursor-grabbing',
               bgClass,
               colorClass,
-              `border-${type}/20`
+              getItemBorderClass()
             )}
           >
             {item}
@@ -98,8 +113,11 @@ function DragDropZone({
 }
 
 function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorProps) {
-  const [editedAgent, setEditedAgent] = useState<AgentConfig>({ ...agent })
-  const [activeTab, setActiveTab] = useState<'tools' | 'skills' | 'mcp'>('tools')
+  const [editedAgent, setEditedAgent] = useState<AgentConfig>({
+    ...agent,
+    disallowed_tools: agent.disallowed_tools || (agent as any).disallowedTools || [],
+  })
+  const [activeTab, setActiveTab] = useState<'tools' | 'skills' | 'mcp' | 'disallowed'>('tools')
   const [availableDropActive, setAvailableDropActive] = useState(false)
   const [assignedDropActive, setAssignedDropActive] = useState(false)
   const [mcpServers, setMcpServers] = useState<MCPServerWithTools[]>([])
@@ -143,12 +161,13 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
   const handleSave = async () => {
     try {
       // Only send fields the backend expects (exclude filename, nickname)
+      // Use camelCase disallowedTools to match API expectations
       const payload = {
         name: editedAgent.name,
         description: editedAgent.description,
         model: editedAgent.model,
         tools: editedAgent.tools,
-        disallowed_tools: editedAgent.disallowed_tools,
+        disallowedTools: editedAgent.disallowed_tools,
         skills: editedAgent.skills,
         body: editedAgent.body,
       };
@@ -175,9 +194,12 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
     if (allToolsEnabled) return
     const toolsArray = editedAgent.tools as string[]
     if (!toolsArray.includes(tool)) {
+      // Remove from disallowed_tools if present
+      const updatedDisallowed = editedAgent.disallowed_tools.filter(t => t !== tool)
       setEditedAgent({
         ...editedAgent,
         tools: [...toolsArray, tool],
+        disallowed_tools: updatedDisallowed,
       })
     }
   }
@@ -194,9 +216,12 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
     if (allToolsEnabled) return
     const toolsArray = editedAgent.tools as string[]
     if (!toolsArray.includes(fullName)) {
+      // Remove from disallowed_tools if present
+      const updatedDisallowed = editedAgent.disallowed_tools.filter(t => t !== fullName)
       setEditedAgent({
         ...editedAgent,
         tools: [...toolsArray, fullName],
+        disallowed_tools: updatedDisallowed,
       })
     }
   }
@@ -209,14 +234,18 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
     })
   }
 
-  const addDisallowedTool = () => {
-    const toolName = prompt('Enter tool name to disallow:')
-    if (toolName && !editedAgent.disallowed_tools.includes(toolName)) {
-      setEditedAgent({
-        ...editedAgent,
-        disallowed_tools: [...editedAgent.disallowed_tools, toolName],
-      })
-    }
+  const addDisallowedTool = (tool: string) => {
+    if (editedAgent.disallowed_tools.includes(tool)) return
+
+    // Remove from tools if present
+    const toolsArray = editedAgent.tools === '*' ? [] : (editedAgent.tools as string[])
+    const updatedTools = toolsArray.filter(t => t !== tool)
+
+    setEditedAgent({
+      ...editedAgent,
+      tools: editedAgent.tools === '*' ? '*' : updatedTools,
+      disallowed_tools: [...editedAgent.disallowed_tools, tool],
+    })
   }
 
   const removeDisallowedTool = (tool: string) => {
@@ -249,7 +278,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
     })
   }
 
-  const handleDragStart = (e: React.DragEvent, type: 'skill' | 'tool' | 'mcp', name: string, source: 'available' | 'assigned') => {
+  const handleDragStart = (e: React.DragEvent, type: 'skill' | 'tool' | 'mcp' | 'disallowed', name: string, source: 'available' | 'assigned') => {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/plain', JSON.stringify({ type, name, source }))
   }
@@ -267,6 +296,8 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
           removeBaseTool(data.name)
         } else if (activeTab === 'mcp' && data.type === 'mcp') {
           removeMcpTool(data.name)
+        } else if (activeTab === 'disallowed' && data.type === 'disallowed') {
+          removeDisallowedTool(data.name)
         }
       }
     } catch (err) {
@@ -287,6 +318,8 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
           addBaseTool(data.name)
         } else if (activeTab === 'mcp' && data.type === 'mcp') {
           addMcpTool(data.name)
+        } else if (activeTab === 'disallowed' && data.type === 'disallowed') {
+          addDisallowedTool(data.name)
         }
       }
     } catch (err) {
@@ -383,6 +416,17 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
                 )}
               >
                 MCP
+              </button>
+              <button
+                onClick={() => setActiveTab('disallowed')}
+                className={cn(
+                  'px-4 py-2 text-sm font-medium transition-colors border-b-2',
+                  activeTab === 'disallowed'
+                    ? 'border-red-500 text-red-500'
+                    : 'border-transparent text-foreground-secondary hover:text-foreground'
+                )}
+              >
+                Disallowed
               </button>
             </div>
 
@@ -626,24 +670,53 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
                   </div>
                 </>
               )}
-            </div>
 
-            {/* Disallowed Tools section */}
-            <div className="mt-4 border-t border-border pt-4">
-              <h4 className="text-sm font-medium text-red-400 mb-2">Disallowed Tools</h4>
-              <div className="flex flex-wrap gap-2">
-                {editedAgent.disallowed_tools.map(tool => (
-                  <span key={tool} className="px-2 py-1 bg-red-900/30 text-red-400 border border-red-700 rounded text-sm flex items-center gap-1.5">
-                    {tool}
-                    <button onClick={() => removeDisallowedTool(tool)} className="hover:text-red-300 transition-colors">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                ))}
-                <button onClick={addDisallowedTool} className="px-2 py-1 text-red-400 text-sm hover:bg-red-900/20 rounded transition-colors border border-red-700/50">
-                  + Add
-                </button>
-              </div>
+              {activeTab === 'disallowed' && (
+                <>
+                  <DragDropZone
+                    items={(() => {
+                      // Get all available tools (base tools + MCP tools) that are not in disallowed
+                      const allBaseTools = DEFAULT_CLAUDE_TOOLS
+                      const allMcpTools = mcpServers.flatMap(server =>
+                        server.tools.map(tool => tool.full_name)
+                      )
+                      const allTools = [...allBaseTools, ...allMcpTools]
+                      return allTools.filter(tool => !editedAgent.disallowed_tools.includes(tool))
+                    })()}
+                    type="tool"
+                    colorClass="text-red-400"
+                    bgClass="bg-red-900/30"
+                    onAdd={addDisallowedTool}
+                    onRemove={removeDisallowedTool}
+                    dropActive={availableDropActive}
+                    onDragOver={(e) => {
+                      handleDragOver(e)
+                      setAvailableDropActive(true)
+                    }}
+                    onDragLeave={() => setAvailableDropActive(false)}
+                    onDrop={handleAvailableDrop}
+                    label="Available"
+                    dragStartHandler={(e, item) => handleDragStart(e, 'disallowed', item, 'available')}
+                  />
+                  <DragDropZone
+                    items={editedAgent.disallowed_tools}
+                    type="tool"
+                    colorClass="text-red-400"
+                    bgClass="bg-red-900/30"
+                    onAdd={addDisallowedTool}
+                    onRemove={removeDisallowedTool}
+                    dropActive={assignedDropActive}
+                    onDragOver={(e) => {
+                      handleDragOver(e)
+                      setAssignedDropActive(true)
+                    }}
+                    onDragLeave={() => setAssignedDropActive(false)}
+                    onDrop={handleAssignedDrop}
+                    label="Assigned"
+                    dragStartHandler={(e, item) => handleDragStart(e, 'disallowed', item, 'assigned')}
+                  />
+                </>
+              )}
             </div>
           </div>
 
