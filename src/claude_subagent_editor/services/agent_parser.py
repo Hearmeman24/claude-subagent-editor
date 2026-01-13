@@ -59,7 +59,7 @@ class AgentParser:
             filename=filename,
             name=self._get_required(data, "name"),
             description=self._get_required(data, "description"),
-            model=self._get_required(data, "model"),
+            model=data.get("model", "sonnet"),
             tools=self._normalize_list(data.get("tools", [])),
             skills=self._normalize_list(data.get("skills", [])),
             nickname=data.get("nickname"),

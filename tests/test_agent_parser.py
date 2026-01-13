@@ -126,15 +126,18 @@ Body.
     with pytest.raises(ValueError, match="Missing required field: description"):
         parser.parse_content(content_missing_description, "test.md")
 
-    content_missing_model = """---
+
+def test_parse_model_defaults_to_sonnet(parser: AgentParser) -> None:
+    """Test that model field defaults to 'sonnet' when not provided."""
+    content = """---
 name: Test
 description: Test description
 ---
 
 Body.
 """
-    with pytest.raises(ValueError, match="Missing required field: model"):
-        parser.parse_content(content_missing_model, "test.md")
+    result = parser.parse_content(content, "test.md")
+    assert result.model == "sonnet"
 
 
 def test_parse_missing_frontmatter_start(parser: AgentParser) -> None:
