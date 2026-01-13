@@ -1,29 +1,8 @@
-import { useState } from 'react'
-import { ArrowLeft } from 'lucide-react'
-import type { AgentConfig, ProjectScanResponse } from '@/types'
+import { useState, useEffect } from 'react'
+import { ArrowLeft, X } from 'lucide-react'
+import type { AgentConfig, ProjectScanResponse, ModelType, SkillInfo, MCPServerInfo, GlobalResourcesResponse } from '@/types'
 import { cn } from '@/lib/utils'
 import ProjectPicker from '@/components/ProjectPicker'
-
-interface BaseTool {
-  name: string
-  category: 'file' | 'execution' | 'code' | 'web' | 'notebook' | 'utility'
-}
-
-const BASE_TOOLS: BaseTool[] = [
-  { name: 'Read', category: 'file' },
-  { name: 'Write', category: 'file' },
-  { name: 'Edit', category: 'file' },
-  { name: 'Glob', category: 'file' },
-  { name: 'Grep', category: 'file' },
-  { name: 'Bash', category: 'execution' },
-  { name: 'Task', category: 'execution' },
-  { name: 'LSP', category: 'code' },
-  { name: 'WebFetch', category: 'web' },
-  { name: 'WebSearch', category: 'web' },
-  { name: 'NotebookEdit', category: 'notebook' },
-  { name: 'TodoWrite', category: 'utility' },
-  { name: 'AskUserQuestion', category: 'utility' },
-]
 
 const modelColors = {
   opus: 'text-opus',
@@ -31,7 +10,232 @@ const modelColors = {
   haiku: 'text-haiku',
 }
 
-function AgentCard({ agent }: { agent: AgentConfig }) {
+interface AgentEditorProps {
+  agent: AgentConfig
+  onClose: () => void
+  onSave: (updatedAgent: AgentConfig) => void
+}
+
+function AgentEditor({ agent, onClose, onSave }: AgentEditorProps) {
+  const [editedAgent, setEditedAgent] = useState<AgentConfig>({ ...agent })
+  const [toolInput, setToolInput] = useState('')
+  const [skillInput, setSkillInput] = useState('')
+
+  const handleSave = async () => {
+    try {
+      const response = await fetch(`/api/agents/${agent.filename}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(editedAgent),
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to save: ${response.statusText}`)
+      }
+
+      onSave(editedAgent)
+      onClose()
+    } catch (err) {
+      console.error('Failed to save agent:', err)
+      alert('Failed to save agent. The backend endpoint may not be implemented yet.')
+    }
+  }
+
+  const addTool = () => {
+    if (toolInput.trim() && !editedAgent.tools.includes(toolInput.trim())) {
+      setEditedAgent({
+        ...editedAgent,
+        tools: [...editedAgent.tools, toolInput.trim()],
+      })
+      setToolInput('')
+    }
+  }
+
+  const removeTool = (tool: string) => {
+    setEditedAgent({
+      ...editedAgent,
+      tools: editedAgent.tools.filter((t) => t !== tool),
+    })
+  }
+
+  const addSkill = () => {
+    if (skillInput.trim() && !editedAgent.skills.includes(skillInput.trim())) {
+      setEditedAgent({
+        ...editedAgent,
+        skills: [...editedAgent.skills, skillInput.trim()],
+      })
+      setSkillInput('')
+    }
+  }
+
+  const removeSkill = (skill: string) => {
+    setEditedAgent({
+      ...editedAgent,
+      skills: editedAgent.skills.filter((s) => s !== skill),
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-background border border-border rounded-lg w-full max-w-3xl max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between p-4 border-b border-border">
+          <h2 className="text-lg font-semibold">Edit Agent</h2>
+          <button
+            onClick={onClose}
+            className="text-foreground-secondary hover:text-foreground transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Name</label>
+            <input
+              type="text"
+              value={editedAgent.name}
+              onChange={(e) => setEditedAgent({ ...editedAgent, name: e.target.value })}
+              className="w-full px-3 py-2 bg-background-elevated border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-tool/50"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Nickname (optional)</label>
+            <input
+              type="text"
+              value={editedAgent.nickname || ''}
+              onChange={(e) => setEditedAgent({ ...editedAgent, nickname: e.target.value || null })}
+              className="w-full px-3 py-2 bg-background-elevated border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-tool/50"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Description</label>
+            <textarea
+              value={editedAgent.description}
+              onChange={(e) => setEditedAgent({ ...editedAgent, description: e.target.value })}
+              rows={3}
+              className="w-full px-3 py-2 bg-background-elevated border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-tool/50 resize-none"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Model</label>
+            <select
+              value={editedAgent.model}
+              onChange={(e) => setEditedAgent({ ...editedAgent, model: e.target.value as ModelType })}
+              className="w-full px-3 py-2 bg-background-elevated border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-tool/50"
+            >
+              <option value="opus">Opus</option>
+              <option value="sonnet">Sonnet</option>
+              <option value="haiku">Haiku</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Tools</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={toolInput}
+                onChange={(e) => setToolInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addTool()}
+                placeholder="Add tool..."
+                className="flex-1 px-3 py-2 bg-background-elevated border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-tool/50"
+              />
+              <button
+                onClick={addTool}
+                className="px-4 py-2 bg-tool text-white rounded text-sm font-medium hover:bg-tool/90 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {editedAgent.tools.map((tool) => (
+                <span
+                  key={tool}
+                  className="px-2 py-1 text-xs rounded bg-tool-bg text-tool border border-tool/20 flex items-center gap-1.5"
+                >
+                  {tool}
+                  <button
+                    onClick={() => removeTool(tool)}
+                    className="hover:text-foreground transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Skills</label>
+            <div className="flex gap-2 mb-2">
+              <input
+                type="text"
+                value={skillInput}
+                onChange={(e) => setSkillInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addSkill()}
+                placeholder="Add skill..."
+                className="flex-1 px-3 py-2 bg-background-elevated border border-border rounded text-sm focus:outline-none focus:ring-2 focus:ring-tool/50"
+              />
+              <button
+                onClick={addSkill}
+                className="px-4 py-2 bg-tool text-white rounded text-sm font-medium hover:bg-tool/90 transition-colors"
+              >
+                Add
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {editedAgent.skills.map((skill) => (
+                <span
+                  key={skill}
+                  className="px-2 py-1 text-xs rounded bg-skill-bg text-skill border border-skill/20 flex items-center gap-1.5"
+                >
+                  {skill}
+                  <button
+                    onClick={() => removeSkill(skill)}
+                    className="hover:text-foreground transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1.5">Body (Markdown)</label>
+            <textarea
+              value={editedAgent.body}
+              onChange={(e) => setEditedAgent({ ...editedAgent, body: e.target.value })}
+              rows={10}
+              className="w-full px-3 py-2 bg-background-elevated border border-border rounded text-sm font-mono focus:outline-none focus:ring-2 focus:ring-tool/50 resize-none"
+              placeholder="Agent instructions in markdown..."
+            />
+          </div>
+        </div>
+
+        <div className="flex items-center justify-end gap-3 p-4 border-t border-border">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 text-sm font-medium text-foreground-secondary hover:text-foreground transition-colors"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={handleSave}
+            className="px-4 py-2 bg-tool text-white rounded text-sm font-medium hover:bg-tool/90 transition-colors"
+          >
+            Save Changes
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function AgentCard({ agent, onEdit }: { agent: AgentConfig; onEdit: (agent: AgentConfig) => void }) {
 
   return (
     <div className="border border-border rounded-lg p-4 bg-background-elevated hover:bg-background-hover transition-colors">
@@ -85,7 +289,7 @@ function AgentCard({ agent }: { agent: AgentConfig }) {
 
       <div className="flex gap-2 mt-4 pt-3 border-t border-border-subtle">
         <button
-          onClick={() => console.log('Edit agent:', agent.name)}
+          onClick={() => onEdit(agent)}
           className="text-xs text-foreground-secondary hover:text-foreground transition-colors"
         >
           Edit
@@ -96,14 +300,14 @@ function AgentCard({ agent }: { agent: AgentConfig }) {
 }
 
 function ResourceSidebar({
-  tools,
+  skills,
   mcpServers,
 }: {
-  tools: BaseTool[]
-  mcpServers: string[]
+  skills: SkillInfo[]
+  mcpServers: MCPServerInfo[]
 }) {
   const [expandedSections, setExpandedSections] = useState({
-    tools: true,
+    skills: true,
     mcp: true,
   })
 
@@ -118,20 +322,21 @@ function ResourceSidebar({
       <div className="space-y-4">
         <div>
           <button
-            onClick={() => toggleSection('tools')}
+            onClick={() => toggleSection('skills')}
             className="flex items-center justify-between w-full text-sm font-medium mb-2 hover:text-foreground transition-colors"
           >
-            <span>Base Tools ({tools.length})</span>
-            <span className="text-xs">{expandedSections.tools ? '▼' : '▸'}</span>
+            <span>Skills ({skills.length})</span>
+            <span className="text-xs">{expandedSections.skills ? '▼' : '▸'}</span>
           </button>
-          {expandedSections.tools && (
+          {expandedSections.skills && (
             <div className="space-y-1 pl-2">
-              {tools.map((tool) => (
+              {skills.map((skill) => (
                 <div
-                  key={tool.name}
-                  className="text-xs px-2 py-1.5 rounded hover:bg-background-hover cursor-grab text-tool"
+                  key={skill.name}
+                  className="text-xs px-2 py-1.5 rounded hover:bg-background-hover cursor-grab text-skill"
+                  title={skill.description || skill.path}
                 >
-                  {tool.name}
+                  {skill.name}
                 </div>
               ))}
             </div>
@@ -150,10 +355,17 @@ function ResourceSidebar({
             <div className="space-y-1 pl-2">
               {mcpServers.map((server) => (
                 <div
-                  key={server}
-                  className="text-xs px-2 py-1.5 rounded hover:bg-background-hover cursor-grab text-mcp"
+                  key={server.name}
+                  className="text-xs px-2 py-1.5 rounded hover:bg-background-hover cursor-grab text-mcp flex items-center gap-2"
+                  title={server.command || server.url || ''}
                 >
-                  {server}
+                  <span
+                    className={cn(
+                      'w-2 h-2 rounded-full',
+                      server.connected ? 'bg-green-500' : 'bg-gray-500'
+                    )}
+                  />
+                  {server.name}
                 </div>
               ))}
             </div>
@@ -172,6 +384,27 @@ export default function App() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [projectData, setProjectData] = useState<ProjectScanResponse | null>(null)
+  const [editingAgent, setEditingAgent] = useState<AgentConfig | null>(null)
+  const [globalResources, setGlobalResources] = useState<GlobalResourcesResponse>({
+    skills: [],
+    mcp_servers: [],
+  })
+
+  useEffect(() => {
+    const fetchGlobalResources = async () => {
+      try {
+        const response = await fetch('/api/resources/global')
+        if (response.ok) {
+          const data: GlobalResourcesResponse = await response.json()
+          setGlobalResources(data)
+        }
+      } catch (err) {
+        console.error('Failed to fetch global resources:', err)
+      }
+    }
+
+    fetchGlobalResources()
+  }, [])
 
   const handleSelectProject = async (path: string) => {
     setCurrentProjectPath(path)
@@ -207,11 +440,24 @@ export default function App() {
     setError(null)
   }
 
+  const handleEditAgent = (agent: AgentConfig) => {
+    setEditingAgent(agent)
+  }
+
+  const handleSaveAgent = (updatedAgent: AgentConfig) => {
+    if (!projectData) return
+
+    setProjectData({
+      ...projectData,
+      agents: projectData.agents.map((a) =>
+        a.filename === updatedAgent.filename ? updatedAgent : a
+      ),
+    })
+  }
+
   if (viewState === 'projects') {
     return <ProjectPicker onSelectProject={handleSelectProject} />
   }
-
-  const allMcpServers = projectData ? projectData.mcp_servers : []
 
   return (
     <div className="h-screen flex flex-col">
@@ -244,8 +490,8 @@ export default function App() {
         {projectData && !loading && (
           <>
             <ResourceSidebar
-              tools={BASE_TOOLS}
-              mcpServers={allMcpServers}
+              skills={globalResources.skills}
+              mcpServers={globalResources.mcp_servers}
             />
 
             <main className="flex-1 overflow-y-auto p-6">
@@ -268,7 +514,7 @@ export default function App() {
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     {projectData.agents.map((agent) => (
-                      <AgentCard key={agent.filename} agent={agent} />
+                      <AgentCard key={agent.filename} agent={agent} onEdit={handleEditAgent} />
                     ))}
                   </div>
                 )}
@@ -286,6 +532,14 @@ export default function App() {
           </div>
         )}
       </div>
+
+      {editingAgent && (
+        <AgentEditor
+          agent={editingAgent}
+          onClose={() => setEditingAgent(null)}
+          onSave={handleSaveAgent}
+        />
+      )}
     </div>
   )
 }

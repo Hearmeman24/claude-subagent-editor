@@ -28,3 +28,21 @@ export interface Project {
   name: string
   lastOpened?: string
 }
+
+export interface SkillInfo {
+  name: string
+  path: string
+  description: string | null
+}
+
+export interface MCPServerInfo {
+  name: string
+  command: string | null
+  url: string | null
+  connected: boolean
+}
+
+export interface GlobalResourcesResponse {
+  skills: SkillInfo[]
+  mcp_servers: MCPServerInfo[]
+}
