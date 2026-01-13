@@ -207,8 +207,9 @@ class MCPToolDiscovery:
             # Handle specific HTTP status errors
             logger.warning("HTTP %s error querying server %s: %s", e.response.status_code, server_name, e)
             if e.response.status_code == 406:
-                # 406 Not Acceptable may indicate SSE transport requirement
-                error_msg = "HTTP MCP servers with SSE transport not yet supported"
+                # 406 Not Acceptable indicates SSE transport requirement - try SSE
+                logger.info("Falling back to SSE transport for server %s", server_name)
+                return await self._query_http_sse(url, server_name)
             else:
                 error_msg = f"HTTP {e.response.status_code}: {str(e)}"
             return MCPServerWithTools(
@@ -231,6 +232,138 @@ class MCPToolDiscovery:
                 name=server_name,
                 connected=False,
                 error=str(e),
+                tools=[],
+            )
+
+    async def _query_http_sse(self, url: str, server_name: str) -> MCPServerWithTools:
+        """Query an HTTP MCP server using SSE (Server-Sent Events) transport.
+
+        Args:
+            url: HTTP/HTTPS URL of the server.
+            server_name: Name of the MCP server.
+
+        Returns:
+            MCPServerWithTools: Server with discovered tools.
+        """
+        try:
+            from urllib.parse import urljoin
+
+            async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+                # Step 1: Open SSE connection to get endpoint
+                endpoint_path = None
+
+                async with client.stream(
+                    "GET",
+                    url,
+                    headers={"Accept": "text/event-stream"}
+                ) as sse_response:
+                    sse_response.raise_for_status()
+
+                    # Parse SSE to find endpoint
+                    event_type = None
+                    async for line in sse_response.aiter_lines():
+                        line = line.strip()
+                        if not line:
+                            continue
+
+                        if line.startswith("event: "):
+                            event_type = line[7:].strip()
+                        elif line.startswith("data: "):
+                            data = line[6:].strip()
+                            if event_type == "endpoint":
+                                endpoint_path = data
+                                break
+                            # Some servers may not send "event: endpoint" first
+                            elif "sessionId" in data or data.startswith("/"):
+                                endpoint_path = data
+                                break
+
+                if not endpoint_path:
+                    return MCPServerWithTools(
+                        name=server_name,
+                        connected=False,
+                        error="Could not get SSE endpoint",
+                        tools=[],
+                    )
+
+                # Step 2: Build full endpoint URL
+                message_url = urljoin(url, endpoint_path)
+                logger.debug("SSE endpoint for %s: %s", server_name, message_url)
+
+                # Step 3: Send initialize request
+                init_resp = await client.post(
+                    message_url,
+                    json={
+                        "jsonrpc": "2.0",
+                        "method": "initialize",
+                        "params": {
+                            "protocolVersion": "2024-11-05",
+                            "capabilities": {},
+                            "clientInfo": {
+                                "name": "claude-subagent-editor",
+                                "version": "0.1.0",
+                            },
+                        },
+                        "id": 1,
+                    },
+                    headers={"Content-Type": "application/json"},
+                )
+                init_resp.raise_for_status()
+
+                # Step 4: Send tools/list request
+                tools_resp = await client.post(
+                    message_url,
+                    json={
+                        "jsonrpc": "2.0",
+                        "method": "tools/list",
+                        "id": 2,
+                    },
+                    headers={"Content-Type": "application/json"},
+                )
+                tools_resp.raise_for_status()
+
+                # Parse tools from response
+                tools_data = tools_resp.json()
+                tools_list = tools_data.get("result", {}).get("tools", [])
+
+                # Convert to MCPToolInfo objects
+                tools = [
+                    MCPToolInfo(
+                        name=tool["name"],
+                        full_name=f"mcp__{server_name}__{tool['name']}",
+                        description=tool.get("description"),
+                    )
+                    for tool in tools_list
+                ]
+
+                return MCPServerWithTools(
+                    name=server_name,
+                    connected=True,
+                    tools=tools,
+                )
+
+        except httpx.HTTPStatusError as e:
+            logger.warning("SSE HTTP %s error querying server %s: %s", e.response.status_code, server_name, e)
+            return MCPServerWithTools(
+                name=server_name,
+                connected=False,
+                error=f"SSE HTTP {e.response.status_code}: {str(e)}",
+                tools=[],
+            )
+        except httpx.HTTPError as e:
+            logger.warning("SSE HTTP error querying server %s: %s", server_name, e)
+            return MCPServerWithTools(
+                name=server_name,
+                connected=False,
+                error=f"SSE HTTP error: {str(e)}",
+                tools=[],
+            )
+        except Exception as e:
+            logger.warning("SSE error querying server %s: %s", server_name, e)
+            return MCPServerWithTools(
+                name=server_name,
+                connected=False,
+                error=f"SSE error: {str(e)}",
                 tools=[],
             )
 
