@@ -47,14 +47,14 @@ A web-based GUI for editing Claude Code subagent configuration files. Manage you
 ## Installation
 
 ```bash
-uvx claude-subagent-editor
-```
-
-Or install from source:
-```bash
 git clone https://github.com/Hearmeman24/claude-subagent-editor
 cd claude-subagent-editor
 uv run claude-subagent-editor
+```
+
+Or install from GitHub directly:
+```bash
+uvx --from git+https://github.com/Hearmeman24/claude-subagent-editor claude-subagent-editor
 ```
 
 ## Usage
