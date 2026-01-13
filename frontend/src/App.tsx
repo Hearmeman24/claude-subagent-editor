@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { ArrowLeft, X } from 'lucide-react'
-import type { AgentConfig, ProjectScanResponse, ModelType, SkillInfo, MCPServerInfo, GlobalResourcesResponse } from '@/types'
+import { ArrowLeft, X, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
+import type { AgentConfig, ProjectScanResponse, ModelType, SkillInfo, MCPServerInfo, GlobalResourcesResponse, MCPServerWithTools } from '@/types'
 import { cn } from '@/lib/utils'
 import ProjectPicker from '@/components/ProjectPicker'
 
@@ -15,17 +15,6 @@ const DEFAULT_CLAUDE_TOOLS = [
   'Task', 'WebFetch', 'WebSearch', 'NotebookEdit',
   'TodoWrite', 'AskUserQuestion', 'Skill', 'LSP'
 ]
-
-// Helper to convert MCP server name to wildcard format
-const toMcpWildcard = (serverName: string): string =>
-  `mcp__${serverName.toLowerCase().replace(/-/g, '_')}__*`
-
-// Helper to extract server name from MCP wildcard
-const fromMcpWildcard = (wildcard: string): string | null => {
-  const match = wildcard.match(/^mcp__(.+)__\*$/)
-  if (!match) return null
-  return match[1].replace(/_/g, '-')
-}
 
 interface AgentEditorProps {
   agent: AgentConfig
@@ -113,15 +102,34 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
   const [activeTab, setActiveTab] = useState<'tools' | 'skills' | 'mcp'>('tools')
   const [availableDropActive, setAvailableDropActive] = useState(false)
   const [assignedDropActive, setAssignedDropActive] = useState(false)
+  const [mcpServers, setMcpServers] = useState<MCPServerWithTools[]>([])
+  const [expandedServers, setExpandedServers] = useState<Record<string, boolean>>({})
+
+  // Fetch MCP tools on mount
+  useEffect(() => {
+    const fetchMcpTools = async () => {
+      try {
+        const response = await fetch('/api/mcp/tools')
+        if (response.ok) {
+          const data = await response.json()
+          setMcpServers(data.servers)
+          // Auto-expand all servers by default
+          const expanded: Record<string, boolean> = {}
+          data.servers.forEach((server: MCPServerWithTools) => {
+            expanded[server.name] = true
+          })
+          setExpandedServers(expanded)
+        }
+      } catch (err) {
+        console.error('Failed to fetch MCP tools:', err)
+      }
+    }
+    fetchMcpTools()
+  }, [])
 
   // Separate base tools from MCP tools in agent's tools array
   const agentBaseTools = editedAgent.tools.filter(t => !t.startsWith('mcp__'))
   const agentMcpTools = editedAgent.tools.filter(t => t.startsWith('mcp__'))
-
-  // Get assigned MCP server names from wildcards
-  const assignedMcpServers = agentMcpTools
-    .map(fromMcpWildcard)
-    .filter((name): name is string => name !== null)
 
   // Filter available items to exclude already assigned ones
   const availableSkills = globalResources.skills
@@ -130,10 +138,6 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
 
   const availableBaseTools = DEFAULT_CLAUDE_TOOLS
     .filter((name) => !agentBaseTools.includes(name))
-
-  const availableMcpServers = globalResources.mcp_servers
-    .map((s) => s.name)
-    .filter((name) => !assignedMcpServers.includes(name))
 
   const handleSave = async () => {
     try {
@@ -181,22 +185,27 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
     })
   }
 
-  const addMcpServer = (serverName: string) => {
-    const wildcard = toMcpWildcard(serverName)
-    if (!editedAgent.tools.includes(wildcard)) {
+  const addMcpTool = (fullName: string) => {
+    if (!editedAgent.tools.includes(fullName)) {
       setEditedAgent({
         ...editedAgent,
-        tools: [...editedAgent.tools, wildcard],
+        tools: [...editedAgent.tools, fullName],
       })
     }
   }
 
-  const removeMcpServer = (serverName: string) => {
-    const wildcard = toMcpWildcard(serverName)
+  const removeMcpTool = (fullName: string) => {
     setEditedAgent({
       ...editedAgent,
-      tools: editedAgent.tools.filter((t) => t !== wildcard),
+      tools: editedAgent.tools.filter((t) => t !== fullName),
     })
+  }
+
+  const toggleServer = (serverName: string) => {
+    setExpandedServers(prev => ({
+      ...prev,
+      [serverName]: !prev[serverName]
+    }))
   }
 
   const addSkill = (skill: string) => {
@@ -232,7 +241,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
         } else if (activeTab === 'tools' && data.type === 'tool') {
           removeBaseTool(data.name)
         } else if (activeTab === 'mcp' && data.type === 'mcp') {
-          removeMcpServer(data.name)
+          removeMcpTool(data.name)
         }
       }
     } catch (err) {
@@ -252,7 +261,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
         } else if (activeTab === 'tools' && data.type === 'tool') {
           addBaseTool(data.name)
         } else if (activeTab === 'mcp' && data.type === 'mcp') {
-          addMcpServer(data.name)
+          addMcpTool(data.name)
         }
       }
     } catch (err) {
@@ -442,40 +451,120 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
 
               {activeTab === 'mcp' && (
                 <>
-                  <DragDropZone
-                    items={availableMcpServers}
-                    type="mcp"
-                    colorClass="text-mcp"
-                    bgClass="bg-mcp-bg"
-                    onAdd={addMcpServer}
-                    onRemove={removeMcpServer}
-                    dropActive={availableDropActive}
-                    onDragOver={(e) => {
-                      handleDragOver(e)
-                      setAvailableDropActive(true)
-                    }}
-                    onDragLeave={() => setAvailableDropActive(false)}
-                    onDrop={handleAvailableDrop}
-                    label="Available"
-                    dragStartHandler={(e, item) => handleDragStart(e, 'mcp', item, 'available')}
-                  />
-                  <DragDropZone
-                    items={assignedMcpServers}
-                    type="mcp"
-                    colorClass="text-mcp"
-                    bgClass="bg-mcp-bg"
-                    onAdd={addMcpServer}
-                    onRemove={removeMcpServer}
-                    dropActive={assignedDropActive}
-                    onDragOver={(e) => {
-                      handleDragOver(e)
-                      setAssignedDropActive(true)
-                    }}
-                    onDragLeave={() => setAssignedDropActive(false)}
-                    onDrop={handleAssignedDrop}
-                    label="Assigned"
-                    dragStartHandler={(e, item) => handleDragStart(e, 'mcp', item, 'assigned')}
-                  />
+                  {/* Available MCP Tools - Grouped by Server */}
+                  <div className="flex-1">
+                    <div className="text-xs font-medium text-foreground-secondary mb-2">Available</div>
+                    <div
+                      onDrop={handleAvailableDrop}
+                      onDragOver={(e) => {
+                        handleDragOver(e)
+                        setAvailableDropActive(true)
+                      }}
+                      onDragLeave={() => setAvailableDropActive(false)}
+                      className={cn(
+                        'min-h-[200px] max-h-[200px] overflow-y-auto p-3 rounded border-2 border-dashed transition-colors',
+                        availableDropActive ? 'border-mcp bg-mcp/10' : 'border-border bg-background-elevated'
+                      )}
+                    >
+                      {mcpServers.length === 0 && (
+                        <span className="text-xs text-foreground-muted italic">Loading MCP tools...</span>
+                      )}
+                      {mcpServers.map((server) => {
+                        const availableTools = server.tools.filter(
+                          tool => !agentMcpTools.includes(tool.full_name)
+                        )
+                        if (availableTools.length === 0 && server.connected) return null
+
+                        return (
+                          <div key={server.name} className="mb-3 last:mb-0">
+                            <button
+                              onClick={() => toggleServer(server.name)}
+                              className="flex items-center gap-1.5 w-full text-xs font-medium text-foreground-secondary hover:text-foreground transition-colors mb-1.5"
+                            >
+                              {expandedServers[server.name] ? (
+                                <ChevronDown className="w-3 h-3" />
+                              ) : (
+                                <ChevronRight className="w-3 h-3" />
+                              )}
+                              <span>{server.name}</span>
+                              {server.connected ? (
+                                <span className="text-green-500">✓</span>
+                              ) : (
+                                <span className="text-amber-500" title={server.error || 'Not connected'}>
+                                  <AlertTriangle className="w-3 h-3" />
+                                </span>
+                              )}
+                            </button>
+                            {expandedServers[server.name] && (
+                              <div className="pl-4 space-y-1">
+                                {!server.connected && (
+                                  <div className="text-xs text-foreground-muted italic">
+                                    {server.error || 'No tools available'}
+                                  </div>
+                                )}
+                                {availableTools.map((tool) => (
+                                  <span
+                                    key={tool.full_name}
+                                    draggable
+                                    onDragStart={(e) => handleDragStart(e, 'mcp', tool.full_name, 'available')}
+                                    className="px-2 py-1 text-xs rounded border flex items-center gap-1.5 cursor-grab active:cursor-grabbing bg-mcp-bg text-mcp border-mcp/20"
+                                    title={tool.description || tool.name}
+                                  >
+                                    {tool.name}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Assigned MCP Tools */}
+                  <div className="flex-1">
+                    <div className="text-xs font-medium text-foreground-secondary mb-2">Assigned</div>
+                    <div
+                      onDrop={handleAssignedDrop}
+                      onDragOver={(e) => {
+                        handleDragOver(e)
+                        setAssignedDropActive(true)
+                      }}
+                      onDragLeave={() => setAssignedDropActive(false)}
+                      className={cn(
+                        'min-h-[200px] max-h-[200px] overflow-y-auto p-3 rounded border-2 border-dashed transition-colors',
+                        assignedDropActive ? 'border-mcp bg-mcp/10' : 'border-border bg-background-elevated',
+                        'flex flex-wrap gap-2 content-start'
+                      )}
+                    >
+                      {agentMcpTools.length === 0 && (
+                        <span className="text-xs text-foreground-muted italic">Drag tools here</span>
+                      )}
+                      {agentMcpTools.map((fullName) => {
+                        // Extract display name from full_name
+                        const parts = fullName.split('__')
+                        const displayName = parts.length >= 3 ? parts[2] : fullName
+
+                        return (
+                          <span
+                            key={fullName}
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, 'mcp', fullName, 'assigned')}
+                            className="px-2 py-1 text-xs rounded border flex items-center gap-1.5 h-fit cursor-grab active:cursor-grabbing bg-mcp-bg text-mcp border-mcp/20"
+                            title={fullName}
+                          >
+                            {displayName}
+                            <button
+                              onClick={() => removeMcpTool(fullName)}
+                              className="hover:text-foreground transition-colors"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          </span>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </>
               )}
             </div>

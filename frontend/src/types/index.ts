@@ -42,6 +42,23 @@ export interface MCPServerInfo {
   connected: boolean
 }
 
+export interface MCPToolInfo {
+  name: string
+  full_name: string
+  description: string | null
+}
+
+export interface MCPServerWithTools {
+  name: string
+  connected: boolean
+  error: string | null
+  tools: MCPToolInfo[]
+}
+
+export interface MCPToolsResponse {
+  servers: MCPServerWithTools[]
+}
+
 export interface GlobalResourcesResponse {
   skills: SkillInfo[]
   mcp_servers: MCPServerInfo[]
