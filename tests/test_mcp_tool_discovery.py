@@ -114,9 +114,22 @@ async def test_query_http_server_error(tool_discovery):
 
 
 @pytest.mark.asyncio
-async def test_query_http_server_406_not_acceptable(tool_discovery):
-    """Test querying HTTP MCP server with 406 Not Acceptable (SSE transport)."""
+async def test_query_http_server_406_falls_back_to_sse(tool_discovery):
+    """Test querying HTTP MCP server with 406 falls back to SSE transport."""
     import httpx
+
+    # Mock SSE success response
+    mock_sse_result = MCPServerWithTools(
+        name="test",
+        connected=True,
+        tools=[
+            MCPToolInfo(
+                name="sse_tool",
+                full_name="mcp__test__sse_tool",
+                description="SSE tool",
+            )
+        ],
+    )
 
     with patch("httpx.AsyncClient") as mock_client:
         # Create a mock HTTPStatusError for 406
@@ -130,11 +143,95 @@ async def test_query_http_server_406_not_acceptable(tool_discovery):
             side_effect=mock_error
         )
 
-        result = await tool_discovery._query_http_server("test", "http://localhost:8080")
+        with patch.object(tool_discovery, "_query_http_sse", return_value=mock_sse_result):
+            result = await tool_discovery._query_http_server("test", "http://localhost:8080")
 
-        assert result.name == "test"
+            assert result.name == "test"
+            assert result.connected is True
+            assert len(result.tools) == 1
+            assert result.tools[0].name == "sse_tool"
+
+
+@pytest.mark.asyncio
+async def test_query_http_sse_success(tool_discovery):
+    """Test querying HTTP MCP server with SSE transport successfully."""
+
+    # Mock SSE stream response
+    async def mock_aiter_lines():
+        """Mock SSE event stream."""
+        yield "event: endpoint"
+        yield "data: /message?sessionId=test123"
+        yield ""
+
+    mock_sse_response = MagicMock()
+    mock_sse_response.aiter_lines = mock_aiter_lines
+    mock_sse_response.raise_for_status = MagicMock()
+
+    # Mock JSON-RPC responses
+    mock_init_response = MagicMock()
+    mock_init_response.json.return_value = {"result": {"protocolVersion": "2024-11-05"}}
+    mock_init_response.raise_for_status = MagicMock()
+
+    mock_tools_response = MagicMock()
+    mock_tools_response.json.return_value = {
+        "result": {
+            "tools": [
+                {"name": "sse_tool1", "description": "SSE tool 1"},
+                {"name": "sse_tool2"},
+            ]
+        }
+    }
+    mock_tools_response.raise_for_status = MagicMock()
+
+    with patch("httpx.AsyncClient") as mock_client:
+        mock_client_instance = MagicMock()
+        mock_client.return_value.__aenter__.return_value = mock_client_instance
+
+        # Mock the stream method
+        mock_client_instance.stream.return_value.__aenter__.return_value = mock_sse_response
+
+        # Mock the post method for init and tools/list
+        mock_client_instance.post = AsyncMock(
+            side_effect=[mock_init_response, mock_tools_response]
+        )
+
+        result = await tool_discovery._query_http_sse("http://localhost:8080", "test-sse")
+
+        assert result.name == "test-sse"
+        assert result.connected is True
+        assert result.error is None
+        assert len(result.tools) == 2
+        assert result.tools[0].name == "sse_tool1"
+        assert result.tools[0].full_name == "mcp__test-sse__sse_tool1"
+        assert result.tools[0].description == "SSE tool 1"
+        assert result.tools[1].name == "sse_tool2"
+
+
+@pytest.mark.asyncio
+async def test_query_http_sse_no_endpoint(tool_discovery):
+    """Test SSE transport when endpoint is not found."""
+
+    # Mock SSE stream response with no endpoint
+    async def mock_aiter_lines():
+        """Mock SSE event stream without endpoint."""
+        yield "event: message"
+        yield "data: some other data"
+        yield ""
+
+    mock_sse_response = MagicMock()
+    mock_sse_response.aiter_lines = mock_aiter_lines
+    mock_sse_response.raise_for_status = MagicMock()
+
+    with patch("httpx.AsyncClient") as mock_client:
+        mock_client_instance = MagicMock()
+        mock_client.return_value.__aenter__.return_value = mock_client_instance
+        mock_client_instance.stream.return_value.__aenter__.return_value = mock_sse_response
+
+        result = await tool_discovery._query_http_sse("http://localhost:8080", "test-sse")
+
+        assert result.name == "test-sse"
         assert result.connected is False
-        assert "SSE transport not yet supported" in result.error
+        assert "Could not get SSE endpoint" in result.error
         assert result.tools == []
 
 
