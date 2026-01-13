@@ -21,6 +21,7 @@ interface AgentEditorProps {
   onClose: () => void
   onSave: (updatedAgent: AgentConfig) => void
   globalResources: GlobalResourcesResponse
+  mcpTools: MCPServerWithTools[]
 }
 
 interface DragDropZoneProps {
@@ -112,7 +113,7 @@ function DragDropZone({
   )
 }
 
-function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorProps) {
+function AgentEditor({ agent, onClose, onSave, globalResources, mcpTools }: AgentEditorProps) {
   const [editedAgent, setEditedAgent] = useState<AgentConfig>({
     ...agent,
     disallowed_tools: agent.disallowed_tools || (agent as any).disallowedTools || [],
@@ -120,31 +121,17 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
   const [activeTab, setActiveTab] = useState<'tools' | 'skills' | 'mcp' | 'disallowed'>('tools')
   const [availableDropActive, setAvailableDropActive] = useState(false)
   const [assignedDropActive, setAssignedDropActive] = useState(false)
-  const [mcpServers, setMcpServers] = useState<MCPServerWithTools[]>([])
   const [expandedServers, setExpandedServers] = useState<Record<string, boolean>>({})
   const [manualMcpInput, setManualMcpInput] = useState('')
 
-  // Fetch MCP tools on mount
+  // Auto-expand all servers when mcpTools change
   useEffect(() => {
-    const fetchMcpTools = async () => {
-      try {
-        const response = await fetch('/api/mcp/tools')
-        if (response.ok) {
-          const data = await response.json()
-          setMcpServers(data.servers)
-          // Auto-expand all servers by default
-          const expanded: Record<string, boolean> = {}
-          data.servers.forEach((server: MCPServerWithTools) => {
-            expanded[server.name] = true
-          })
-          setExpandedServers(expanded)
-        }
-      } catch (err) {
-        console.error('Failed to fetch MCP tools:', err)
-      }
-    }
-    fetchMcpTools()
-  }, [])
+    const expanded: Record<string, boolean> = {}
+    mcpTools.forEach((server: MCPServerWithTools) => {
+      expanded[server.name] = true
+    })
+    setExpandedServers(expanded)
+  }, [mcpTools])
 
   // Separate base tools from MCP tools in agent's tools array
   const allToolsEnabled = editedAgent.tools === '*'
@@ -570,10 +557,10 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
                         availableDropActive ? 'border-mcp bg-mcp/10' : 'border-border bg-background-elevated'
                       )}
                     >
-                      {mcpServers.length === 0 && (
+                      {mcpTools.length === 0 && (
                         <span className="text-xs text-foreground-muted italic">Loading MCP tools...</span>
                       )}
-                      {mcpServers.map((server) => {
+                      {mcpTools.map((server) => {
                         const availableTools = server.tools.filter(
                           tool => !agentMcpTools.includes(tool.full_name)
                         )
@@ -684,7 +671,7 @@ function AgentEditor({ agent, onClose, onSave, globalResources }: AgentEditorPro
                     items={(() => {
                       // Get all available tools (base tools + MCP tools) that are not in disallowed
                       const allBaseTools = DEFAULT_CLAUDE_TOOLS
-                      const allMcpTools = mcpServers.flatMap(server =>
+                      const allMcpTools = mcpTools.flatMap(server =>
                         server.tools.map(tool => tool.full_name)
                       )
                       const allTools = [...allBaseTools, ...allMcpTools]
@@ -988,6 +975,8 @@ export default function App() {
     skills: [],
     mcp_servers: [],
   })
+  const [mcpTools, setMcpTools] = useState<MCPServerWithTools[]>([])
+  const [mcpToolsLoaded, setMcpToolsLoaded] = useState(false)
 
   useEffect(() => {
     const fetchGlobalResources = async () => {
@@ -1004,6 +993,28 @@ export default function App() {
 
     fetchGlobalResources()
   }, [])
+
+  // Fetch MCP tools once when project is scanned
+  useEffect(() => {
+    if (projectData && !mcpToolsLoaded) {
+      fetch('/api/mcp/tools')
+        .then(res => res.json())
+        .then(data => {
+          setMcpTools(data.servers || [])
+          setMcpToolsLoaded(true)
+        })
+        .catch(err => {
+          console.error('Failed to fetch MCP tools:', err)
+          setMcpToolsLoaded(true)
+        })
+    }
+  }, [projectData, mcpToolsLoaded])
+
+  // Reset MCP tools cache when project changes
+  useEffect(() => {
+    setMcpToolsLoaded(false)
+    setMcpTools([])
+  }, [currentProjectPath])
 
   const handleSelectProject = async (path: string) => {
     setCurrentProjectPath(path)
@@ -1138,6 +1149,7 @@ export default function App() {
           onClose={() => setEditingAgent(null)}
           onSave={handleSaveAgent}
           globalResources={globalResources}
+          mcpTools={mcpTools}
         />
       )}
 
